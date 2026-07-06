@@ -431,7 +431,7 @@ function writeAssessmentReport({ outDir, label, relativePath, criteriaSources, a
     "",
     "## Draft Marking Matrix",
     "",
-    "| Criterion | Draft mark | Score | Confidence | Rationale |",
+    "| Criterion | Draft mark | Criterion score | Audit confidence | Rationale |",
     "| --- | --- | ---: | ---: | --- |",
     ...marking.rows.map(
       (row) =>

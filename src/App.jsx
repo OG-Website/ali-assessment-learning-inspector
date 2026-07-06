@@ -379,8 +379,8 @@ function MarkingView({
         <div className="matrix-row matrix-head" role="row">
           <span>Criterion</span>
           <span>Mapped evidence</span>
-          <span>Draft mark</span>
-          <span>Confidence</span>
+          <span>Criterion score</span>
+          <span>Audit confidence</span>
         </div>
         {marking.rows.map((row) => (
           <article className="matrix-row" key={`${row.id}-${row.text}`} role="row">
@@ -394,11 +394,11 @@ function MarkingView({
             </span>
             <span>
               <StatusBadge status={rowStatus(row)} />
-              <small>{row.score}% evidence match</small>
+              <small>{row.score}% mapped evidence match</small>
             </span>
             <span>
               <strong>{row.confidence}%</strong>
-              <small>draft confidence</small>
+              <small>mapping confidence, not the mark</small>
             </span>
           </article>
         ))}

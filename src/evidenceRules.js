@@ -478,6 +478,85 @@ function statusLabel(status) {
   return "needs review";
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function criterionSpecificity(rawCriterion) {
+  const stopWords = new Set([
+    "and",
+    "are",
+    "for",
+    "how",
+    "the",
+    "this",
+    "that",
+    "use",
+    "what",
+    "when",
+    "with",
+  ]);
+  const technicalTerms = new Set([
+    "accuracy",
+    "calculus",
+    "checkpoint",
+    "classification",
+    "confusion",
+    "dataset",
+    "derivative",
+    "gradient",
+    "inference",
+    "loss",
+    "matrix",
+    "model",
+    "numpy",
+    "pandas",
+    "precision",
+    "python",
+    "recall",
+    "repository",
+    "transpose",
+    "validation",
+    "vector",
+  ]);
+  const text = String(rawCriterion || "").toLowerCase();
+  const tokens = text.match(/[a-z0-9]{3,}/g) || [];
+  const usefulTokens = tokens.filter((token) => !stopWords.has(token));
+  const uniqueTokenCount = new Set(usefulTokens).size;
+  const technicalCount = usefulTokens.filter((token) => technicalTerms.has(token)).length;
+  const numericCount = (text.match(/\d+(?:\.\d+)?/g) || []).length;
+
+  return Math.min(uniqueTokenCount, 14) * 0.3 + Math.min(technicalCount, 5) * 1.4 + Math.min(numericCount, 3) * 0.6;
+}
+
+function calculateDraftConfidence(mappedEvidence, score, totalWeight, rawCriterion) {
+  if (!mappedEvidence.length || totalWeight === 0) return 0;
+
+  const counts = mappedEvidence.reduce(
+    (acc, item) => {
+      const status = item.finding?.status || "missing";
+      acc[status] = (acc[status] || 0) + 1;
+      acc.matchCount += Math.min(item.finding?.matches?.length || 0, 8);
+      acc.criterionHits += item.criterionHits.length;
+      acc.evidenceHits += item.evidenceHits.length;
+      return acc;
+    },
+    { pass: 0, warning: 0, missing: 0, matchCount: 0, criterionHits: 0, evidenceHits: 0 },
+  );
+
+  const breadth = Math.min(mappedEvidence.length, 4) * 2.5;
+  const matchDepth = Math.min(counts.matchCount, 18) * 0.55;
+  const relevanceStrength = Math.min(totalWeight, 18) * 0.65;
+  const textSupport = Math.min(counts.criterionHits + counts.evidenceHits, 8) * 0.55;
+  const specificity = criterionSpecificity(rawCriterion);
+  const warningPenalty = (counts.warning || 0) * 9;
+  const missingPenalty = (counts.missing || 0) * 18;
+
+  return Math.round(
+    clamp(16 + score * 0.42 + breadth + matchDepth + relevanceStrength + textSupport + specificity - warningPenalty - missingPenalty, 15, 97),
+  );
+}
+
 export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
   const lowerEvidence = evidenceText.toLowerCase();
   const criteria = splitCriteria(criteriaText);
@@ -507,7 +586,7 @@ export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
     const totalWeight = mappedEvidence.reduce((sum, item) => sum + item.relevance, 0);
     const earned = mappedEvidence.reduce((sum, item) => sum + item.value * item.relevance, 0);
     const score = totalWeight ? Math.round((earned / totalWeight) * 100) : 0;
-    const confidence = Math.min(95, Math.round(45 + Math.min(totalWeight, 10) * 5 + analysis.score * 0.2));
+    const confidence = calculateDraftConfidence(mappedEvidence, score, totalWeight, criterion.raw);
     const draftMark = totalWeight === 0 ? "Needs manual mapping" : score >= 75 ? "Met" : score >= 45 ? "Partially evidenced" : "Not evidenced";
     const humanReview =
       totalWeight === 0
