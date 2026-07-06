@@ -195,8 +195,14 @@ button {
   font-weight: 760;
 }
 
-.topbar-product svg {
-  color: var(--og-magenta);
+.topbar-logo {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(4, 185, 255, 0.38);
+  border-radius: 50%;
+  object-fit: cover;
+  background: #050814;
+  box-shadow: 0 0 14px rgba(4, 185, 255, 0.22), 0 0 18px rgba(240, 51, 255, 0.14);
 }
 
 .topbar p {
@@ -557,20 +563,27 @@ button {
 .upload-panel {
   padding: 22px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   gap: 18px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .upload-copy {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
+  max-width: 780px;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
 }
 
-.upload-copy > svg {
-  color: #0d5bd7;
-  flex: 0 0 auto;
+.panel-logo {
+  width: 64px;
+  height: 64px;
+  border: 1px solid rgba(4, 185, 255, 0.38);
+  border-radius: 50%;
+  object-fit: cover;
+  background: #050814;
+  box-shadow: 0 0 20px rgba(4, 185, 255, 0.24), 0 0 26px rgba(240, 51, 255, 0.16);
 }
 
 .upload-copy h2,
@@ -591,13 +604,14 @@ button {
 }
 
 .upload-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(150px, 180px) minmax(260px, 1fr) minmax(180px, 240px);
+  gap: 12px;
+  align-items: end;
 }
 
 .evidence-set-picker {
-  min-width: min(420px, 44vw);
+  min-width: 0;
   display: grid;
   gap: 6px;
 }
@@ -623,6 +637,13 @@ button {
   padding: 0 16px;
   color: #ffffff;
   background: linear-gradient(135deg, #0d5bd7, #04a7e9);
+}
+
+.primary-button,
+.secondary-button {
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
 }
 
 .primary-button input {
@@ -720,6 +741,7 @@ button {
 
 .evidence-table {
   display: grid;
+  overflow-x: auto;
 }
 
 .file-search {
@@ -813,9 +835,10 @@ button {
 }
 
 .table-row {
+  min-width: 760px;
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(210px, 1.35fr) minmax(180px, 1fr) 90px 124px;
+  grid-template-columns: minmax(220px, 1.25fr) minmax(220px, 1fr) minmax(80px, 0.35fr) minmax(150px, 0.45fr);
   gap: 16px;
   align-items: center;
   padding: 13px 20px;
@@ -824,6 +847,14 @@ button {
   background: #ffffff;
   color: #1d2430;
   text-align: left;
+}
+
+.table-row > span {
+  min-width: 0;
+}
+
+.table-row > span:last-child {
+  justify-self: start;
 }
 
 .table-row:not(.table-head):hover,
@@ -853,6 +884,7 @@ button {
 
 .status-badge {
   min-width: 92px;
+  max-width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -861,6 +893,7 @@ button {
   padding: 6px 9px;
   font-size: 12px;
   font-weight: 760;
+  white-space: nowrap;
 }
 
 .status-badge.pass {
@@ -946,6 +979,8 @@ button {
 .selected-finding {
   padding-top: 16px;
   border-top: 1px solid #e6ebf1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .selected-finding > div,
@@ -954,6 +989,8 @@ button {
   display: flex;
   gap: 9px;
   align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .selected-finding > div svg,
@@ -966,6 +1003,7 @@ button {
   padding: 11px;
   border-radius: 8px;
   background: #f6f8fb;
+  overflow-wrap: anywhere;
 }
 
 .selected-finding ul {
@@ -974,7 +1012,7 @@ button {
   color: #536174;
   font-size: 12px;
   line-height: 1.5;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .skills-panel {

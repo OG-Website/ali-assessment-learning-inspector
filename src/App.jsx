@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
-  BrainCircuit,
   CheckCircle2,
   ClipboardCheck,
   Download,
@@ -20,7 +19,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
-  UploadCloud,
   XCircle,
 } from "lucide-react";
 import {
@@ -83,6 +81,14 @@ function statusFromDisplay(value) {
   return "missing";
 }
 
+function fileNameFromPath(path) {
+  return String(path || "").split(/[\\/]/).pop() || path || "unknown file";
+}
+
+function OgLogoMark({ className = "" }) {
+  return <img className={className} src={`${import.meta.env.BASE_URL}og-logo.png`} alt="OG A.L.I. logo" />;
+}
+
 function hydrateManifestMarking(marking) {
   return {
     ...marking,
@@ -94,6 +100,59 @@ function hydrateManifestMarking(marking) {
         status: statusFromDisplay(item.status),
       })),
     })),
+  };
+}
+
+function hydrateManifestAnalysis(evidenceSet, currentBlockedFiles) {
+  const files = evidenceSet?.files || [];
+  const fileByPath = new Map(files.map((file) => [file.path, file]));
+  const findings = (evidenceSet?.findings || []).map((finding) => {
+    const status = statusFromDisplay(finding.status);
+    return {
+      ...finding,
+      status,
+      matches: (finding.matches || []).map(
+        (path) =>
+          fileByPath.get(path) || {
+            path,
+            name: fileNameFromPath(path),
+            size: 0,
+            contentScanned: false,
+            contentTruncated: false,
+          },
+      ),
+    };
+  });
+  const totalWeight = findings.reduce((sum, finding) => sum + (finding.weight || 0), 0);
+  const earnedWeight = findings.reduce((sum, finding) => {
+    if (finding.status === "pass") return sum + (finding.weight || 0);
+    if (finding.status === "warning") return sum + (finding.weight || 0) * 0.5;
+    return sum;
+  }, 0);
+  const counts =
+    evidenceSet?.report?.counts ||
+    findings.reduce(
+      (acc, finding) => {
+        acc[finding.status] += 1;
+        return acc;
+      },
+      { pass: 0, warning: 0, missing: 0 },
+    );
+  const grouped = findings.reduce((acc, finding) => {
+    acc[finding.group] = acc[finding.group] || [];
+    acc[finding.group].push(finding);
+    return acc;
+  }, {});
+
+  return {
+    files,
+    findings,
+    grouped,
+    score: evidenceSet?.report?.score ?? (totalWeight ? Math.round((earnedWeight / totalWeight) * 100) : 0),
+    totalWeight,
+    earnedWeight,
+    counts,
+    blockedFiles: currentBlockedFiles,
   };
 }
 
@@ -194,7 +253,7 @@ function UploadPanel({
   return (
     <section className="upload-panel">
       <div className="upload-copy">
-        <UploadCloud size={28} />
+        <OgLogoMark className="panel-logo" />
         <div>
           <h2>Inspect a coursework folder</h2>
           <p>
@@ -327,7 +386,7 @@ function MarkingView({
   return (
     <section className="marking-section">
       <div className="marking-hero">
-        <img src={`${import.meta.env.BASE_URL}og-logo.png`} alt="OG logo" />
+        <OgLogoMark />
         <div>
           <div className="hero-label">
             <Sparkles size={16} />
@@ -797,9 +856,14 @@ export default function App() {
     () => files.map((file) => ({ ...file, manualCategory: manualTags[file.path] || "" })),
     [files, manualTags],
   );
+  const canUseManifestAnalysis =
+    Boolean(selectedEvidenceSet?.findings) && files === selectedEvidenceSet.files && Object.keys(manualTags).length === 0;
   const analysis = useMemo(
-    () => ({ ...evaluateFiles(evidenceFiles), blockedFiles }),
-    [evidenceFiles, blockedFiles],
+    () =>
+      canUseManifestAnalysis
+        ? hydrateManifestAnalysis(selectedEvidenceSet, blockedFiles)
+        : { ...evaluateFiles(evidenceFiles), blockedFiles },
+    [blockedFiles, canUseManifestAnalysis, evidenceFiles, selectedEvidenceSet],
   );
   const [selectedId, setSelectedId] = useState("python");
   const selectedFinding = analysis.findings.find((finding) => finding.id === selectedId) || analysis.findings[0];
@@ -942,7 +1006,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-mark">
-          <img src={`${import.meta.env.BASE_URL}og-logo.png`} alt="OG logo" />
+          <OgLogoMark />
           <div>
             <strong>OG A.L.I.</strong>
             <span>{aliExpansion}</span>
@@ -975,7 +1039,7 @@ export default function App() {
         <header className="topbar">
           <div>
             <div className="topbar-product">
-              <BrainCircuit size={24} />
+              <OgLogoMark className="topbar-logo" />
               <span>OG branded assessor tool</span>
             </div>
             <h1>OG A.L.I. - Marking Matrix</h1>

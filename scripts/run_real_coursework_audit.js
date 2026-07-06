@@ -399,6 +399,20 @@ function compactMarking(marking) {
   };
 }
 
+function compactFindings(analysis) {
+  return analysis.findings.map((finding) => ({
+    id: finding.id,
+    label: finding.label,
+    group: finding.group,
+    weight: finding.weight,
+    description: finding.description,
+    skill: finding.skill,
+    status: displayStatus(finding.status),
+    note: finding.note,
+    matches: finding.matches.slice(0, 24).map((file) => file.path),
+  }));
+}
+
 function writeAssessmentReport({ outDir, label, relativePath, criteriaSources, analysis, marking, report }) {
   const baseName = slugify(label);
   const jsonPath = path.join(outDir, `${baseName}.json`);
@@ -527,6 +541,7 @@ function runAudit(options) {
         blockedFiles: report.blockedFiles,
         priorityActions: report.priorityActions,
       },
+      findings: compactFindings(analysis),
       marking: compactMarking(marking),
     });
   }
