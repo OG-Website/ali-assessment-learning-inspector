@@ -135,6 +135,57 @@ export const collegeSampleFiles = [
   { path: "sample-coursework/docs/git-evidence.md", name: "git-evidence.md", size: 640 },
 ];
 
+export const defaultCriteriaText = `AC2.3 - Use version control software to commit, push and evidence changes to a project.
+AC3.1 - Write Python code that uses functions, structured logic and reusable scripts.
+AC3.2 - Use Python libraries such as NumPy or Pandas to process data and produce outputs.
+AC4.1 - Provide model evidence including validation metrics, training outputs or checkpoints.
+AC4.2 - Explain the evidence clearly with documentation, screenshots and assessor-readable notes.`;
+
+export const defaultEvidenceText = `The sample submission includes a Python script, a Jupyter notebook, CSV datasets, Git evidence notes, validation metrics, a model checkpoint, a JSON model summary, screenshot evidence and README documentation.`;
+
+const criteriaMatrix = [
+  {
+    evidenceId: "git-evidence",
+    label: "Git evidence",
+    keywords: ["git", "commit", "push", "branch", "merge", "version", "repository", "github"],
+  },
+  {
+    evidenceId: "python",
+    label: "Python scripts",
+    keywords: ["python", "script", "code", "function", "loop", "logic", "module", "program"],
+  },
+  {
+    evidenceId: "notebooks",
+    label: "Notebook evidence",
+    keywords: ["notebook", "jupyter", "numpy", "pandas", "library", "libraries", "dataframe", "series"],
+  },
+  {
+    evidenceId: "tabular-data",
+    label: "Data files",
+    keywords: ["csv", "data", "dataset", "table", "json", "spreadsheet", "features"],
+  },
+  {
+    evidenceId: "metrics",
+    label: "Validation metrics",
+    keywords: ["metric", "accuracy", "loss", "validation", "confusion", "precision", "recall", "evaluate"],
+  },
+  {
+    evidenceId: "model-output",
+    label: "Model outputs",
+    keywords: ["model", "checkpoint", "training", "trained", "inference", "weights", "pretrained", "deep"],
+  },
+  {
+    evidenceId: "visual-evidence",
+    label: "Screenshot evidence",
+    keywords: ["screenshot", "image", "output", "evidence", "proof", "result", "diagram"],
+  },
+  {
+    evidenceId: "documentation",
+    label: "Documentation",
+    keywords: ["document", "documentation", "readme", "explain", "report", "notes", "guide", "assessor"],
+  },
+];
+
 function normaliseFile(file) {
   const path = file.path || file.webkitRelativePath || file.name || "unknown";
   return {
@@ -214,7 +265,7 @@ export function buildReport(analysis) {
 
   return {
     generatedAt: new Date().toISOString(),
-    product: "A.L.I. - Assessment Learning Inspector",
+    product: "OG A.L.I. - Marking Matrix",
     score: analysis.score,
     scannedFiles: analysis.files.length,
     summary: analysis.counts,
@@ -229,5 +280,98 @@ export function buildReport(analysis) {
       skill: finding.skill,
       matches: finding.matches.slice(0, 8).map((file) => file.path),
     })),
+  };
+}
+
+function splitCriteria(criteriaText) {
+  return criteriaText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const match = line.match(/^([A-Z]*\s*\d+(?:\.\d+)?)[\s:)-]+(.+)$/i);
+      return {
+        id: match ? match[1].replace(/\s+/g, "").toUpperCase() : `C${index + 1}`,
+        text: match ? match[2].trim() : line,
+        raw: line,
+      };
+    });
+}
+
+function statusValue(status) {
+  if (status === "pass") return 1;
+  if (status === "warning") return 0.55;
+  return 0;
+}
+
+export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
+  const lowerEvidence = evidenceText.toLowerCase();
+  const criteria = splitCriteria(criteriaText);
+  const findingById = Object.fromEntries(analysis.findings.map((finding) => [finding.id, finding]));
+
+  const rows = criteria.map((criterion) => {
+    const lowerCriterion = `${criterion.id} ${criterion.text}`.toLowerCase();
+    const mapped = criteriaMatrix
+      .map((matrixItem) => {
+        const criterionHits = matrixItem.keywords.filter((keyword) => lowerCriterion.includes(keyword));
+        const evidenceHits = matrixItem.keywords.filter((keyword) => lowerEvidence.includes(keyword));
+        const finding = findingById[matrixItem.evidenceId];
+        const relevance = criterionHits.length * 2 + Math.min(evidenceHits.length, 2);
+        return {
+          ...matrixItem,
+          finding,
+          criterionHits,
+          evidenceHits,
+          relevance,
+          value: finding ? statusValue(finding.status) : 0,
+        };
+      })
+      .filter((item) => item.relevance > 0);
+
+    const fallback = mapped.length
+      ? mapped
+      : criteriaMatrix.slice(0, 4).map((matrixItem) => ({
+          ...matrixItem,
+          finding: findingById[matrixItem.evidenceId],
+          criterionHits: [],
+          evidenceHits: [],
+          relevance: 1,
+          value: findingById[matrixItem.evidenceId] ? statusValue(findingById[matrixItem.evidenceId].status) : 0,
+        }));
+
+    const totalWeight = fallback.reduce((sum, item) => sum + item.relevance, 0);
+    const earned = fallback.reduce((sum, item) => sum + item.value * item.relevance, 0);
+    const score = Math.round((earned / totalWeight) * 100);
+    const confidence = Math.min(95, Math.round(45 + Math.min(totalWeight, 10) * 5 + analysis.score * 0.2));
+    const draftMark = score >= 75 ? "Met" : score >= 45 ? "Partially evidenced" : "Not evidenced";
+    const humanReview =
+      confidence < 70 || score < 75
+        ? "Human review required before this can be treated as a mark."
+        : "Strong evidence match, still requires assessor confirmation.";
+
+    return {
+      ...criterion,
+      mappedEvidence: fallback,
+      score,
+      confidence,
+      draftMark,
+      humanReview,
+      rationale:
+        fallback
+          .slice(0, 3)
+          .map((item) => `${item.label}: ${item.finding?.status || "missing"}`)
+          .join("; ") || "No evidence categories mapped.",
+    };
+  });
+
+  const overallScore = rows.length
+    ? Math.round(rows.reduce((sum, row) => sum + row.score, 0) / rows.length)
+    : 0;
+
+  return {
+    rows,
+    overallScore,
+    assessorNote:
+      "Draft marks are produced from evidence presence and keyword mapping. A tutor must confirm quality, authenticity and sufficiency.",
   };
 }

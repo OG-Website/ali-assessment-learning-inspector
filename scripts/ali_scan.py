@@ -218,7 +218,7 @@ def build_report(root: Path) -> dict[str, object]:
     ]
 
     return {
-        "product": "A.L.I. - Assessment Learning Inspector",
+        "product": "OG A.L.I. - Marking Matrix",
         "root": str(root),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "score": round((earned_weight / total_weight) * 100),

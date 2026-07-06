@@ -2,22 +2,33 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
+  BrainCircuit,
   CheckCircle2,
   ClipboardCheck,
   Download,
   FileSearch,
+  FileCheck2,
   FolderOpen,
   Gauge,
   GraduationCap,
   Layers3,
-  Search,
+  Scale,
   ShieldCheck,
+  Sparkles,
   UploadCloud,
   XCircle,
 } from "lucide-react";
-import { buildReport, collegeSampleFiles, evaluateFiles } from "./evidenceRules.js";
+import {
+  buildReport,
+  collegeSampleFiles,
+  defaultCriteriaText,
+  defaultEvidenceText,
+  evaluateFiles,
+  evaluateMarkingMatrix,
+} from "./evidenceRules.js";
 
 const navItems = [
+  { id: "marking", label: "Marking", icon: Scale },
   { id: "scan", label: "Scan", icon: FileSearch },
   { id: "evidence", label: "Evidence", icon: ClipboardCheck },
   { id: "metrics", label: "Metrics", icon: BarChart3 },
@@ -83,6 +94,94 @@ function UploadPanel({ onFiles, onSample, fileCount }) {
         </button>
       </div>
       <p className="folder-note">{fileCount} file(s) loaded for the current scan.</p>
+    </section>
+  );
+}
+
+function MarkingView({
+  analysis,
+  marking,
+  criteriaText,
+  evidenceText,
+  onCriteriaChange,
+  onEvidenceChange,
+  onLoadPreset,
+}) {
+  return (
+    <section className="marking-section">
+      <div className="marking-hero">
+        <img src={`${import.meta.env.BASE_URL}og-logo.png`} alt="OG logo" />
+        <div>
+          <div className="hero-label">
+            <Sparkles size={16} />
+            OG branded assessor support
+          </div>
+          <h2>OG A.L.I. Marking Matrix</h2>
+          <p>
+            Paste assessment criteria, scan the evidence folder, and A.L.I. produces a transparent
+            draft mark for each criterion with confidence and human-review notes.
+          </p>
+        </div>
+        <div className="marking-score">
+          <span>Draft matrix score</span>
+          <strong>{marking.overallScore}%</strong>
+        </div>
+      </div>
+
+      <div className="marking-inputs">
+        <label>
+          <span>Assessment criteria</span>
+          <textarea value={criteriaText} onChange={(event) => onCriteriaChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Learner evidence notes</span>
+          <textarea value={evidenceText} onChange={(event) => onEvidenceChange(event.target.value)} />
+        </label>
+      </div>
+
+      <div className="matrix-toolbar">
+        <button className="secondary-button" type="button" onClick={onLoadPreset}>
+          <FileCheck2 size={18} />
+          Load Assessment 2.3 preset
+        </button>
+        <span>
+          Uses {analysis.findings.length} evidence checks and {marking.rows.length} criteria rows.
+        </span>
+      </div>
+
+      <div className="marking-matrix" role="table">
+        <div className="matrix-row matrix-head" role="row">
+          <span>Criterion</span>
+          <span>Mapped evidence</span>
+          <span>Draft mark</span>
+          <span>Confidence</span>
+        </div>
+        {marking.rows.map((row) => (
+          <article className="matrix-row" key={`${row.id}-${row.text}`} role="row">
+            <span>
+              <strong>{row.id}</strong>
+              <small>{row.text}</small>
+            </span>
+            <span>
+              <strong>{row.rationale}</strong>
+              <small>{row.humanReview}</small>
+            </span>
+            <span>
+              <StatusBadge status={row.score >= 75 ? "pass" : row.score >= 45 ? "warning" : "missing"} />
+              <small>{row.score}% evidence match</small>
+            </span>
+            <span>
+              <strong>{row.confidence}%</strong>
+              <small>draft confidence</small>
+            </span>
+          </article>
+        ))}
+      </div>
+
+      <p className="assessor-disclaimer">
+        <ShieldCheck size={17} />
+        {marking.assessorNote}
+      </p>
     </section>
   );
 }
@@ -282,13 +381,19 @@ function RightRail({ analysis, selectedFinding, onExport }) {
 }
 
 export default function App() {
-  const [activeView, setActiveView] = useState("scan");
+  const [activeView, setActiveView] = useState("marking");
   const [files, setFiles] = useState(collegeSampleFiles);
   const [filter, setFilter] = useState("all");
+  const [criteriaText, setCriteriaText] = useState(defaultCriteriaText);
+  const [evidenceText, setEvidenceText] = useState(defaultEvidenceText);
   const analysis = useMemo(() => evaluateFiles(files), [files]);
   const [selectedId, setSelectedId] = useState("python");
   const selectedFinding = analysis.findings.find((finding) => finding.id === selectedId) || analysis.findings[0];
   const report = useMemo(() => buildReport(analysis), [analysis]);
+  const marking = useMemo(
+    () => evaluateMarkingMatrix(analysis, criteriaText, evidenceText),
+    [analysis, criteriaText, evidenceText],
+  );
 
   function handleFiles(event) {
     const nextFiles = Array.from(event.target.files || []).map((file) => ({
@@ -316,10 +421,10 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-mark">
-          <Search size={24} />
+          <img src={`${import.meta.env.BASE_URL}og-logo.png`} alt="OG logo" />
           <div>
-            <strong>A.L.I.</strong>
-            <span>Assessment Learning Inspector</span>
+            <strong>OG A.L.I.</strong>
+            <span>Marking Matrix</span>
           </div>
         </div>
         <nav>
@@ -340,25 +445,43 @@ export default function App() {
         </nav>
         <div className="ali-note">
           <strong>For Ali</strong>
-          <span>Evidence-first checking for practical AI Programming work.</span>
+          <span>Evidence-first marking support for practical AI Programming work.</span>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
           <div>
-            <h1>A.L.I. - Assessment Learning Inspector</h1>
-            <p>Scan coursework evidence, prove coverage, and surface the weak spots before submission.</p>
+            <div className="topbar-product">
+              <BrainCircuit size={24} />
+              <span>OG branded assessor tool</span>
+            </div>
+            <h1>OG A.L.I. - Marking Matrix</h1>
+            <p>Scan coursework evidence, map it to criteria, and produce transparent draft marks for human review.</p>
           </div>
           <div className="topbar-stats">
             <span>{analysis.files.length} files</span>
             <span>{analysis.findings.length} checks</span>
-            <span>{analysis.score}% ready</span>
+            <span>{marking.overallScore}% matrix</span>
           </div>
         </header>
 
         <div className="content-grid">
           <div className="primary-stack">
+            {activeView === "marking" && (
+              <MarkingView
+                analysis={analysis}
+                marking={marking}
+                criteriaText={criteriaText}
+                evidenceText={evidenceText}
+                onCriteriaChange={setCriteriaText}
+                onEvidenceChange={setEvidenceText}
+                onLoadPreset={() => {
+                  setCriteriaText(defaultCriteriaText);
+                  setEvidenceText(defaultEvidenceText);
+                }}
+              />
+            )}
             {activeView === "scan" && (
               <>
                 <UploadPanel
