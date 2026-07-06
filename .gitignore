@@ -1,0 +1,8 @@
+node_modules/
+dist/
+reports/
+*.local.json
+*.log
+*.zip
+.env
+.env.*
