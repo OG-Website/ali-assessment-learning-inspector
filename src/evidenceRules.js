@@ -7,6 +7,7 @@ const presenceRules = [
     minimum: 1,
     description: "Finds .py files that show functions, modules, decisions, loops, and reusable code.",
     patterns: [/\.py$/i],
+    contentPatterns: [/\bdef\s+\w+\s*\(/i, /\bclass\s+\w+/i, /\bimport\s+\w+/i, /\bfor\s+\w+\s+in\b/i],
     skill: "Unit 1 Python fundamentals",
   },
   {
@@ -17,6 +18,7 @@ const presenceRules = [
     minimum: 1,
     description: "Finds .ipynb notebooks for practical NumPy, Pandas, visualisation, and model evidence.",
     patterns: [/\.ipynb$/i],
+    contentPatterns: [/"cells"\s*:/i, /"cell_type"\s*:\s*"code"/i, /\bjupyter\b/i, /\bnotebook\b/i],
     skill: "Unit 3 notebook evidence",
   },
   {
@@ -26,7 +28,8 @@ const presenceRules = [
     weight: 10,
     minimum: 1,
     description: "Finds CSV, JSON, or spreadsheet data used for analysis and repeatable testing.",
-    patterns: [/\.csv$/i, /\.json$/i, /\.xlsx?$/i],
+    patterns: [/\.csv$/i, /\.json$/i, /\.xlsx?$/i, /\.parquet$/i, /\.tsv$/i],
+    contentPatterns: [/\bdataframe\b/i, /\bfeatures?\b/i, /\bcolumns?\b/i, /\bdataset\b/i],
     skill: "Pandas datasets and structured files",
   },
   {
@@ -36,7 +39,8 @@ const presenceRules = [
     weight: 10,
     minimum: 1,
     description: "Finds PNG/JPG/WebP evidence showing the work running or model output being inspected.",
-    patterns: [/\.(png|jpe?g|webp)$/i, /screenshot/i, /evidence/i],
+    patterns: [/\.(png|jpe?g|webp|gif|bmp)$/i, /screen[\s_-]?shot/i, /evidence/i, /proof/i, /capture/i],
+    contentPatterns: [/\bscreenshot\b/i, /\bproof\b/i, /\bevidence\b/i],
     skill: "Real evidence collection",
   },
   {
@@ -46,7 +50,8 @@ const presenceRules = [
     weight: 10,
     minimum: 1,
     description: "Finds README, commit, branch, repository, or Git evidence material.",
-    patterns: [/\.git(\/|\\|$)/i, /git/i, /commit/i, /branch/i, /readme/i],
+    patterns: [/\.git(\/|\\|$)/i, /git/i, /commit/i, /branch/i, /readme/i, /github/i, /repository/i],
+    contentPatterns: [/\bgit\s+(commit|push|status|log)\b/i, /\bcommit\s+[a-f0-9]{7,40}\b/i, /\bbranch\b/i],
     skill: "Unit 2 Git workflow",
   },
   {
@@ -56,7 +61,29 @@ const presenceRules = [
     weight: 14,
     minimum: 1,
     description: "Finds loss, accuracy, validation, confusion matrix, or metrics outputs.",
-    patterns: [/metric/i, /accuracy/i, /loss/i, /validation/i, /confusion/i, /summary\.json$/i],
+    patterns: [
+      /metric/i,
+      /accuracy/i,
+      /loss/i,
+      /validat/i,
+      /eval/i,
+      /confusion/i,
+      /classification[\s_-]?report/i,
+      /precision/i,
+      /recall/i,
+      /\bf1\b/i,
+      /scores?/i,
+      /summary\.json$/i,
+    ],
+    contentPatterns: [
+      /\baccuracy\b/i,
+      /\bvalidation\b/i,
+      /\bprecision\b/i,
+      /\brecall\b/i,
+      /\bf1\b/i,
+      /\bconfusion\s+matrix\b/i,
+      /\bloss\b/i,
+    ],
     skill: "Unit 4 validation and metrics",
   },
   {
@@ -66,7 +93,29 @@ const presenceRules = [
     weight: 12,
     minimum: 1,
     description: "Finds checkpoints, weights, trained models, inference output, or saved model summaries.",
-    patterns: [/checkpoint/i, /model/i, /inference/i, /\.(pt|pth|pkl|h5|keras|weights)$/i],
+    patterns: [
+      /check[\s_-]*outputs?(?:[\s_-]*v?\d+)?/i,
+      /checkpoint/i,
+      /model/i,
+      /inference/i,
+      /predictions?/i,
+      /outputs?/i,
+      /results?/i,
+      /runs?[\\/]/i,
+      /saved[\s_-]?model/i,
+      /best[\s_-]?model/i,
+      /training[\s_-]?(output|run|result|log)/i,
+      /\.(pt|pth|pkl|h5|keras|weights|onnx|safetensors|joblib|pb|tflite)$/i,
+    ],
+    contentPatterns: [
+      /\bcheckpoint\b/i,
+      /\binference\b/i,
+      /\bpredictions?\b/i,
+      /\bsaved_model\b/i,
+      /\bstate_dict\b/i,
+      /\bmodel[_\s-]?version\b/i,
+      /\btrained\s+model\b/i,
+    ],
     skill: "Unit 4 training and pretrained networks",
   },
   {
@@ -76,9 +125,45 @@ const presenceRules = [
     weight: 10,
     minimum: 2,
     description: "Finds README, DOCX, PDF, Markdown, or text files that explain the work and evidence.",
-    patterns: [/readme/i, /\.(md|txt|docx|pdf)$/i, /how.to/i, /guide/i],
+    patterns: [/readme/i, /\.(md|txt|docx|pdf)$/i, /how.to/i, /guide/i, /write[\s_-]?up/i, /assessment/i],
+    contentPatterns: [/\bassessment\b/i, /\bevidence\b/i, /\bcriteria\b/i, /\bexplain/i, /^#/m],
     skill: "Assessor-ready communication",
   },
+];
+
+export const evidenceCategories = presenceRules.map(({ id, label }) => ({ id, label }));
+
+const sensitiveRules = [
+  {
+    reason: "Environment variable file",
+    patterns: [/(^|[\\/])\.env(?:[.\w-]*)?$/i],
+  },
+  {
+    reason: "Private key or certificate",
+    patterns: [/(^|[\\/])id_(rsa|dsa|ecdsa|ed25519)$/i, /\.(pem|p12|pfx|key)$/i, /private[_\s-]?key/i],
+  },
+  {
+    reason: "Credential, password, token, or API key",
+    patterns: [
+      /password/i,
+      /secret/i,
+      /api[_\s-]?key/i,
+      /token/i,
+      /credential/i,
+      /client[_\s-]?secret/i,
+      /service[_\s-]?account/i,
+    ],
+  },
+  {
+    reason: "Cloud or auth credential file",
+    patterns: [/(google|firebase|aws|azure|gcp).*(credential|secret|key|token)/i, /credentials?\.json$/i],
+  },
+];
+
+const sensitiveContentPatterns = [
+  /\b(api[_-]?key|secret|token|password|private[_-]?key)\b\s*[:=]\s*["']?[A-Za-z0-9_\-./+=]{12,}/i,
+  /-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----/i,
+  /\bAKIA[0-9A-Z]{16}\b/,
 ];
 
 const qualityRules = [
@@ -108,9 +193,7 @@ const qualityRules = [
     description: "Warns if filenames suggest passwords, tokens, API keys, or private keys.",
     skill: "Responsible project hygiene",
     evaluate(files) {
-      const matches = files.filter((file) =>
-        /(password|secret|api[_-]?key|token|private[_-]?key|credential)/i.test(file.path),
-      );
+      const matches = files.filter((file) => getSensitiveFileIssue(file));
       return {
         matches,
         status: matches.length ? "warning" : "pass",
@@ -167,12 +250,38 @@ const criteriaMatrix = [
   {
     evidenceId: "metrics",
     label: "Validation metrics",
-    keywords: ["metric", "accuracy", "loss", "validation", "confusion", "precision", "recall", "evaluate"],
+    keywords: [
+      "metric",
+      "accuracy",
+      "loss",
+      "validation",
+      "confusion",
+      "precision",
+      "recall",
+      "evaluate",
+      "evaluation",
+      "f1",
+      "score",
+    ],
   },
   {
     evidenceId: "model-output",
     label: "Model outputs",
-    keywords: ["model", "checkpoint", "training", "trained", "inference", "weights", "pretrained", "deep"],
+    keywords: [
+      "model",
+      "checkpoint",
+      "check output",
+      "outputs",
+      "results",
+      "prediction",
+      "training",
+      "trained",
+      "inference",
+      "weights",
+      "pretrained",
+      "deep",
+      "gpu",
+    ],
   },
   {
     evidenceId: "visual-evidence",
@@ -192,11 +301,66 @@ function normaliseFile(file) {
     path,
     name: file.name || path.split(/[\\/]/).pop(),
     size: Number(file.size || 0),
+    type: file.type || "",
+    searchText: file.searchText || "",
+    contentScanned: Boolean(file.contentScanned),
+    contentTruncated: Boolean(file.contentTruncated),
+    manualCategory: file.manualCategory || "",
   };
 }
 
+function fileSearchCorpus(file, includeContent = true) {
+  return [file.path, file.name, includeContent ? file.searchText : ""].filter(Boolean).join("\n");
+}
+
+export function getSensitiveFileIssue(file, includeContent = false) {
+  const path = file.path || file.webkitRelativePath || file.name || "";
+  const pathRule = sensitiveRules.find((rule) => rule.patterns.some((pattern) => pattern.test(path)));
+  if (pathRule) return pathRule.reason;
+
+  if (includeContent && file.searchText) {
+    const hasSensitiveContent = sensitiveContentPatterns.some((pattern) => pattern.test(file.searchText));
+    if (hasSensitiveContent) return "Secret-looking value inside readable file";
+  }
+
+  return "";
+}
+
+export function splitSafeFiles(inputFiles, includeContent = false) {
+  return inputFiles.reduce(
+    (acc, file) => {
+      const normalised = normaliseFile(file);
+      const reason = getSensitiveFileIssue(normalised, includeContent);
+      if (reason) {
+        acc.blocked.push({
+          reason,
+          size: normalised.size,
+        });
+      } else {
+        acc.accepted.push(normalised);
+      }
+      return acc;
+    },
+    { accepted: [], blocked: [] },
+  );
+}
+
+export function summarizeBlockedFiles(blockedFiles) {
+  return blockedFiles.reduce((summary, file) => {
+    const reason = file.reason || "Sensitive file";
+    summary[reason] = (summary[reason] || 0) + 1;
+    return summary;
+  }, {});
+}
+
 function evaluatePresence(rule, files) {
-  const matches = files.filter((file) => rule.patterns.some((pattern) => pattern.test(file.path)));
+  const matches = files.filter((file) => {
+    if (file.manualCategory === rule.id) return true;
+    const pathCorpus = fileSearchCorpus(file, false);
+    if (rule.patterns.some((pattern) => pattern.test(pathCorpus))) return true;
+    if (!file.contentScanned || !rule.contentPatterns?.length) return false;
+    return rule.contentPatterns.some((pattern) => pattern.test(file.searchText));
+  });
   let status = "pass";
   if (matches.length === 0) {
     status = "missing";
@@ -268,6 +432,8 @@ export function buildReport(analysis) {
     product: "OG A.L.I. - Marking Matrix",
     score: analysis.score,
     scannedFiles: analysis.files.length,
+    blockedFiles: analysis.blockedFiles?.length || 0,
+    blockedSummary: summarizeBlockedFiles(analysis.blockedFiles || []),
     summary: analysis.counts,
     priorityActions: priority.length ? priority : ["No immediate evidence gaps detected."],
     findings: analysis.findings.map((finding) => ({
@@ -358,7 +524,7 @@ export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
       humanReview,
       rationale:
         fallback
-          .slice(0, 3)
+          .slice(0, 4)
           .map((item) => `${item.label}: ${item.finding?.status || "missing"}`)
           .join("; ") || "No evidence categories mapped.",
     };

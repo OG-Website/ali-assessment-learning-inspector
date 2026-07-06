@@ -8,13 +8,18 @@ import {
   Download,
   FileSearch,
   FileCheck2,
+  FileText,
   FolderOpen,
   Gauge,
   GraduationCap,
   Layers3,
+  ListChecks,
+  LockKeyhole,
   Scale,
+  Search,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UploadCloud,
   XCircle,
 } from "lucide-react";
@@ -23,9 +28,13 @@ import {
   collegeSampleFiles,
   defaultCriteriaText,
   defaultEvidenceText,
+  evidenceCategories,
   evaluateFiles,
   evaluateMarkingMatrix,
+  getSensitiveFileIssue,
+  summarizeBlockedFiles,
 } from "./evidenceRules.js";
+import { assessmentIndex, assessmentSources, defaultAssessmentSourceId } from "./assessmentCriteria.js";
 
 const navItems = [
   { id: "marking", label: "Marking", icon: Scale },
@@ -40,6 +49,47 @@ const statusConfig = {
   warning: { label: "Warning", icon: AlertTriangle },
   missing: { label: "Missing", icon: XCircle },
 };
+
+const textScanLimit = 250_000;
+const readableEvidencePattern =
+  /\.(py|ipynb|md|txt|csv|json|js|jsx|ts|tsx|html|css|yml|yaml|toml|ini|cfg|xml|log)$/i;
+
+const defaultAssessmentSource =
+  assessmentSources.find((source) => source.id === defaultAssessmentSourceId) || assessmentSources[0];
+const initialCriteriaText = defaultAssessmentSource?.criteriaText || defaultCriteriaText;
+
+function criteriaLines(source) {
+  return source?.criteriaText?.split(/\r?\n/).filter(Boolean) || [];
+}
+
+function canReadTextForSearch(file, path) {
+  return file.size <= 2_000_000 && readableEvidencePattern.test(path);
+}
+
+async function buildEvidenceEntry(file) {
+  const path = file.webkitRelativePath || file.name;
+  const entry = {
+    path,
+    name: file.name,
+    size: file.size,
+    type: file.type || "",
+    searchText: "",
+    contentScanned: false,
+    contentTruncated: false,
+  };
+
+  if (!canReadTextForSearch(file, path)) return entry;
+
+  try {
+    entry.searchText = await file.slice(0, textScanLimit).text();
+    entry.contentScanned = true;
+    entry.contentTruncated = file.size > textScanLimit;
+  } catch {
+    entry.searchText = "";
+  }
+
+  return entry;
+}
 
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
@@ -69,7 +119,29 @@ function ScoreRing({ score }) {
   );
 }
 
-function UploadPanel({ onFiles, onSample, fileCount }) {
+function BlockedFilesAlert({ blockedFiles }) {
+  if (!blockedFiles.length) return null;
+  const summary = summarizeBlockedFiles(blockedFiles);
+
+  return (
+    <div className="safety-alert">
+      <LockKeyhole size={18} />
+      <div>
+        <strong>{blockedFiles.length} sensitive file(s) blocked</strong>
+        <p>Excluded before scoring, file listing, and report export.</p>
+        <ul>
+          {Object.entries(summary).map(([reason, count]) => (
+            <li key={reason}>
+              {count} x {reason}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function UploadPanel({ onFiles, onSample, fileCount, blockedFiles }) {
   return (
     <section className="upload-panel">
       <div className="upload-copy">
@@ -94,7 +166,60 @@ function UploadPanel({ onFiles, onSample, fileCount }) {
         </button>
       </div>
       <p className="folder-note">{fileCount} file(s) loaded for the current scan.</p>
+      <BlockedFilesAlert blockedFiles={blockedFiles} />
     </section>
+  );
+}
+
+function CriteriaSourcePanel({ sourceId, source, onSourceChange, onLoadSource }) {
+  const previewLines = criteriaLines(source).slice(0, 7);
+
+  return (
+    <div className="criteria-library">
+      <div className="criteria-library-top">
+        <div>
+          <div className="hero-label">
+            <ListChecks size={16} />
+            Criteria library
+          </div>
+          <h3>{assessmentIndex.indexedSourceCount} criteria sources indexed</h3>
+          <p>
+            {assessmentIndex.scannedSourceCount} local AI Programming source document(s) scanned into a compact
+            criteria index.
+          </p>
+        </div>
+        <div className="criteria-actions">
+          <label>
+            <span>Assessment source</span>
+            <select value={sourceId} onChange={(event) => onSourceChange(event.target.value)}>
+              {assessmentSources.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.unit} - {item.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="secondary-button" type="button" onClick={onLoadSource}>
+            <FileText size={18} />
+            Load criteria
+          </button>
+        </div>
+      </div>
+
+      {source && (
+        <div className="criteria-source-card">
+          <strong>{source.title}</strong>
+          <small>
+            {source.unit} / {source.type.toUpperCase()} / {source.criteriaCount} criteria / {source.path}
+          </small>
+          <ul>
+            {previewLines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -106,6 +231,10 @@ function MarkingView({
   onCriteriaChange,
   onEvidenceChange,
   onLoadPreset,
+  criteriaSourceId,
+  criteriaSource,
+  onCriteriaSourceChange,
+  onLoadCriteriaSource,
 }) {
   return (
     <section className="marking-section">
@@ -128,6 +257,13 @@ function MarkingView({
         </div>
       </div>
 
+      <CriteriaSourcePanel
+        sourceId={criteriaSourceId}
+        source={criteriaSource}
+        onSourceChange={onCriteriaSourceChange}
+        onLoadSource={onLoadCriteriaSource}
+      />
+
       <div className="marking-inputs">
         <label>
           <span>Assessment criteria</span>
@@ -142,7 +278,7 @@ function MarkingView({
       <div className="matrix-toolbar">
         <button className="secondary-button" type="button" onClick={onLoadPreset}>
           <FileCheck2 size={18} />
-          Load Assessment 2.3 preset
+          Load default AC2.3 criteria
         </button>
         <span>
           Uses {analysis.findings.length} evidence checks and {marking.rows.length} criteria rows.
@@ -182,6 +318,101 @@ function MarkingView({
         <ShieldCheck size={17} />
         {marking.assessorNote}
       </p>
+    </section>
+  );
+}
+
+function FileReviewPanel({ files, analysis, manualTags, onRemoveFile, onSetManualTag }) {
+  const [query, setQuery] = useState("");
+  const matchesByPath = useMemo(() => {
+    const map = new Map();
+    const categoryIds = new Set(evidenceCategories.map((category) => category.id));
+
+    analysis.findings
+      .filter((finding) => categoryIds.has(finding.id))
+      .forEach((finding) => {
+        finding.matches.forEach((file) => {
+          const matches = map.get(file.path) || [];
+          matches.push(finding.label);
+          map.set(file.path, matches);
+        });
+      });
+
+    return map;
+  }, [analysis.findings]);
+
+  const filteredFiles = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return files;
+    return files.filter((file) => {
+      const tags = (matchesByPath.get(file.path) || []).join(" ").toLowerCase();
+      return `${file.path} ${file.name} ${tags}`.toLowerCase().includes(needle);
+    });
+  }, [files, matchesByPath, query]);
+
+  return (
+    <section className="file-review-section">
+      <div className="section-heading">
+        <div>
+          <h2>Selected evidence files</h2>
+          <p>Review every accepted file, remove the wrong ones, or override the evidence type.</p>
+        </div>
+        <label className="file-search">
+          <Search size={16} />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search files or evidence types"
+          />
+        </label>
+      </div>
+
+      <div className="file-review-table" role="table">
+        <div className="file-review-row file-review-head" role="row">
+          <span>File</span>
+          <span>Auto evidence</span>
+          <span>Override</span>
+          <span>Action</span>
+        </div>
+        {filteredFiles.map((file) => {
+          const autoMatches = matchesByPath.get(file.path) || [];
+          return (
+            <div className="file-review-row" role="row" key={file.path}>
+              <span>
+                <strong>{file.name}</strong>
+                <small>
+                  {file.path} / {formatBytes(file.size)}
+                  {file.contentScanned ? " / content scanned" : " / name only"}
+                  {file.contentTruncated ? " / truncated" : ""}
+                </small>
+              </span>
+              <span>
+                {autoMatches.length ? (
+                  autoMatches.slice(0, 4).map((match) => <em key={match}>{match}</em>)
+                ) : (
+                  <small>No automatic match</small>
+                )}
+              </span>
+              <span>
+                <select value={manualTags[file.path] || ""} onChange={(event) => onSetManualTag(file.path, event.target.value)}>
+                  <option value="">Auto</option>
+                  {evidenceCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </span>
+              <span>
+                <button className="icon-button danger" type="button" onClick={() => onRemoveFile(file.path)} title="Remove file">
+                  <Trash2 size={17} />
+                </button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -321,6 +552,12 @@ function ReportView({ report }) {
           A.L.I. scanned <strong>{report.scannedFiles}</strong> files and produced an evidence score of{" "}
           <strong>{report.score}%</strong>.
         </p>
+        {report.blockedFiles > 0 && (
+          <p>
+            <strong>{report.blockedFiles}</strong> sensitive file(s) were blocked before scoring and excluded from
+            this export.
+          </p>
+        )}
         <h3>Priority actions</h3>
         <ul>
           {report.priorityActions.map((action) => (
@@ -383,10 +620,21 @@ function RightRail({ analysis, selectedFinding, onExport }) {
 export default function App() {
   const [activeView, setActiveView] = useState("marking");
   const [files, setFiles] = useState(collegeSampleFiles);
+  const [blockedFiles, setBlockedFiles] = useState([]);
+  const [manualTags, setManualTags] = useState({});
   const [filter, setFilter] = useState("all");
-  const [criteriaText, setCriteriaText] = useState(defaultCriteriaText);
+  const [criteriaSourceId, setCriteriaSourceId] = useState(defaultAssessmentSource?.id || "");
+  const [criteriaText, setCriteriaText] = useState(initialCriteriaText);
   const [evidenceText, setEvidenceText] = useState(defaultEvidenceText);
-  const analysis = useMemo(() => evaluateFiles(files), [files]);
+  const criteriaSource = assessmentSources.find((source) => source.id === criteriaSourceId) || defaultAssessmentSource;
+  const evidenceFiles = useMemo(
+    () => files.map((file) => ({ ...file, manualCategory: manualTags[file.path] || "" })),
+    [files, manualTags],
+  );
+  const analysis = useMemo(
+    () => ({ ...evaluateFiles(evidenceFiles), blockedFiles }),
+    [evidenceFiles, blockedFiles],
+  );
   const [selectedId, setSelectedId] = useState("python");
   const selectedFinding = analysis.findings.find((finding) => finding.id === selectedId) || analysis.findings[0];
   const report = useMemo(() => buildReport(analysis), [analysis]);
@@ -395,16 +643,87 @@ export default function App() {
     [analysis, criteriaText, evidenceText],
   );
 
-  function handleFiles(event) {
-    const nextFiles = Array.from(event.target.files || []).map((file) => ({
-      path: file.webkitRelativePath || file.name,
-      name: file.name,
-      size: file.size,
-    }));
-    if (nextFiles.length) {
-      setFiles(nextFiles);
-      setSelectedId("python");
+  async function handleFiles(event) {
+    const selectedFiles = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!selectedFiles.length) return;
+
+    const pathSafeFiles = [];
+    const nextBlockedFiles = [];
+
+    selectedFiles.forEach((file) => {
+      const entry = {
+        path: file.webkitRelativePath || file.name,
+        name: file.name,
+        size: file.size,
+        type: file.type || "",
+      };
+      const reason = getSensitiveFileIssue(entry);
+      if (reason) {
+        nextBlockedFiles.push({ reason, size: entry.size });
+      } else {
+        pathSafeFiles.push(file);
+      }
+    });
+
+    const enrichedFiles = await Promise.all(pathSafeFiles.map((file) => buildEvidenceEntry(file)));
+    const safeFiles = [];
+
+    enrichedFiles.forEach((file) => {
+      const reason = getSensitiveFileIssue(file, true);
+      if (reason) {
+        nextBlockedFiles.push({ reason, size: file.size });
+      } else {
+        safeFiles.push(file);
+      }
+    });
+
+    setFiles(safeFiles);
+    setBlockedFiles(nextBlockedFiles);
+    setManualTags({});
+    setSelectedId("python");
+    setFilter("all");
+  }
+
+  function loadSampleFiles() {
+    setFiles(collegeSampleFiles);
+    setBlockedFiles([]);
+    setManualTags({});
+    setSelectedId("python");
+    setFilter("all");
+  }
+
+  function removeFile(path) {
+    setFiles((current) => current.filter((file) => file.path !== path));
+    setManualTags((current) => {
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
+  }
+
+  function setManualTag(path, category) {
+    setManualTags((current) => {
+      const next = { ...current };
+      if (category) {
+        next[path] = category;
+      } else {
+        delete next[path];
+      }
+      return next;
+    });
+  }
+
+  function loadCriteriaSource() {
+    if (criteriaSource?.criteriaText) {
+      setCriteriaText(criteriaSource.criteriaText);
     }
+  }
+
+  function loadDefaultCriteria() {
+    setCriteriaSourceId(defaultAssessmentSource?.id || "");
+    setCriteriaText(defaultAssessmentSource?.criteriaText || defaultCriteriaText);
+    setEvidenceText(defaultEvidenceText);
   }
 
   function exportReport() {
@@ -463,6 +782,7 @@ export default function App() {
             <span>{analysis.files.length} files</span>
             <span>{analysis.findings.length} checks</span>
             <span>{marking.overallScore}% matrix</span>
+            {blockedFiles.length > 0 && <span>{blockedFiles.length} blocked</span>}
           </div>
         </header>
 
@@ -476,18 +796,27 @@ export default function App() {
                 evidenceText={evidenceText}
                 onCriteriaChange={setCriteriaText}
                 onEvidenceChange={setEvidenceText}
-                onLoadPreset={() => {
-                  setCriteriaText(defaultCriteriaText);
-                  setEvidenceText(defaultEvidenceText);
-                }}
+                onLoadPreset={loadDefaultCriteria}
+                criteriaSourceId={criteriaSourceId}
+                criteriaSource={criteriaSource}
+                onCriteriaSourceChange={setCriteriaSourceId}
+                onLoadCriteriaSource={loadCriteriaSource}
               />
             )}
             {activeView === "scan" && (
               <>
                 <UploadPanel
                   fileCount={files.length}
+                  blockedFiles={blockedFiles}
                   onFiles={handleFiles}
-                  onSample={() => setFiles(collegeSampleFiles)}
+                  onSample={loadSampleFiles}
+                />
+                <FileReviewPanel
+                  files={evidenceFiles}
+                  analysis={analysis}
+                  manualTags={manualTags}
+                  onRemoveFile={removeFile}
+                  onSetManualTag={setManualTag}
                 />
                 <EvidenceTable
                   findings={analysis.findings}
