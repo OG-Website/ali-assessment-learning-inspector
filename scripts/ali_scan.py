@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-SKIP_DIRS = {"node_modules", ".venv", "venv", "__pycache__", "dist", ".next", ".git"}
+SKIP_DIRS = {"node_modules", "venv", "__pycache__", "dist", ".next", ".git", ".ipynb_checkpoints"}
 TEXT_SCAN_LIMIT = 250_000
 TEXT_EXTENSIONS = {
     ".cfg",
@@ -284,7 +284,7 @@ SENSITIVE_CONTENT_PATTERNS = (
 
 def iter_files(root: Path) -> Iterable[Path]:
     for path in root.rglob("*"):
-        if any(part.lower() in SKIP_DIRS for part in path.parts):
+        if any(part.lower() in SKIP_DIRS or part.lower().startswith(".venv") for part in path.parts):
             continue
         if path.is_file():
             yield path

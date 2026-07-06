@@ -73,11 +73,22 @@ python scripts\ali_scan.py sample-coursework --report reports\ali-sample-report.
 
 The Python scanner does not upload files. It blocks secret-looking files before scoring, searches readable safe files locally, and exports only the safe manifest plus evidence findings. If `pypdf` is installed, it can also extract PDF text for local matching; otherwise PDF files are still matched by filename and metadata.
 
+## Run the real coursework audit
+
+From the project folder inside the local College tree:
+
+```powershell
+npm run audit:real -- --out "..\ALI Assessment Learning Inspector - SEND TO ALI\00 Real Work Audit Reports"
+```
+
+This batch audit uses the indexed assessment criteria and the same evidence rules as the web app. It writes one Markdown and one JSON report for each real Unit 1-4 assessment/work folder, plus `audit-summary.md`. The reports are draft evidence audits for assessor review, not final official marks.
+
 ## Project layout
 
 - `src/` - React/Vite app and evidence scoring rules.
 - `src/assessmentCriteria.js` - generated criteria index used by the marking matrix.
 - `scripts/build_assessment_index.py` - local index builder for assessment criteria sources.
+- `scripts/run_real_coursework_audit.js` - batch runner for the real Unit 1-4 coursework folders.
 - `scripts/ali_scan.py` - dependency-free local scanner.
 - `sample-coursework/` - small demonstration evidence set.
 - `design/ali-dashboard-concept.png` - generated UI concept used before implementation.
