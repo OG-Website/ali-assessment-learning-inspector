@@ -67,8 +67,8 @@ The browser workflow now includes:
 ## Run the Python scanner
 
 ```powershell
-python scripts\ali_scan.py sample-coursework --json
-python scripts\ali_scan.py sample-coursework --report reports\ali-sample-report.md
+python scripts\ali_scan.py "C:\OGBuild\College\Ai Programming\Unit 4 - Linear Algebra Essentials for Deep Learning\Assessment 5 - Deep Learning Training Project" --json
+python scripts\ali_scan.py "C:\OGBuild\College\Ai Programming\Unit 4 - Linear Algebra Essentials for Deep Learning\Assessment 5 - Deep Learning Training Project" --report reports\ali-real-report.md
 ```
 
 The Python scanner does not upload files. It blocks secret-looking files before scoring, searches readable safe files locally, and exports only the safe manifest plus evidence findings. If `pypdf` is installed, it can also extract PDF text for local matching; otherwise PDF files are still matched by filename and metadata.
@@ -87,15 +87,15 @@ This batch audit uses the indexed assessment criteria and the same evidence rule
 
 - `src/` - React/Vite app and evidence scoring rules.
 - `src/assessmentCriteria.js` - generated criteria index used by the marking matrix.
+- `src/collegeEvidenceManifest.js` - generated manifest of real local College evidence folders used by the app default.
 - `scripts/build_assessment_index.py` - local index builder for assessment criteria sources.
 - `scripts/run_real_coursework_audit.js` - batch runner for the real Unit 1-4 coursework folders.
 - `scripts/ali_scan.py` - dependency-free local scanner.
-- `sample-coursework/` - small demonstration evidence set.
 - `design/ali-dashboard-concept.png` - generated UI concept used before implementation.
 - `design/og-ali-logo-concept.png` - generated OG A.L.I. logo concept.
 
 ## Assessor-facing purpose
 
-OG A.L.I. gives Ali a quick view of whether the work contains practical evidence, not just written explanation. It highlights missing proof before submission: no notebook, no metrics, no screenshots, no model output, weak documentation, or empty files. Risky secret-looking files are blocked before they can become part of the scan.
+OG A.L.I. gives Ali a quick view of whether the work contains practical evidence, not just written explanation. It highlights evidence checks that need review before submission: no notebook, no metrics, no screenshots, no model output, weak documentation, or empty files. Risky secret-looking files are blocked before they can become part of the scan.
 
 The draft marks are deliberately transparent. The app shows what evidence category contributed to each criterion and flags that a tutor must still confirm quality, authenticity and sufficiency.

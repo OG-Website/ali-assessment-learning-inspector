@@ -429,7 +429,7 @@ def evaluate_presence(rule: Rule, files: list[dict[str, object]]) -> dict[str, o
 
     if not matches:
         status = "missing"
-        note = "No matching evidence found."
+        note = "No automatic evidence match in the currently loaded files."
     elif len(matches) < rule.minimum:
         status = "warning"
         note = f"{len(matches)} found, but {rule.minimum} expected for stronger evidence."
@@ -495,6 +495,14 @@ def public_file(file: dict[str, object]) -> dict[str, object]:
         "contentScanned": file["contentScanned"],
         "contentTruncated": file["contentTruncated"],
     }
+
+
+def display_status(status: object) -> str:
+    if status == "pass":
+        return "pass"
+    if status == "warning":
+        return "warning"
+    return "needs review"
 
 
 def build_report(root: Path) -> dict[str, object]:
@@ -567,14 +575,14 @@ def write_markdown(report: dict[str, object], out_path: Path) -> None:
         lines.append(f"- {action}")
     lines.extend(["", "## Findings", ""])
     for finding in report["findings"]:
-        lines.append(f"- **{finding['label']}** - {finding['status']}: {finding['note']}")
+        lines.append(f"- **{finding['label']}** - {display_status(finding['status'])}: {finding['note']}")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scan coursework evidence with A.L.I.")
-    parser.add_argument("root", nargs="?", default="sample-coursework", help="Coursework folder to scan")
+    parser.add_argument("root", help="Coursework folder to scan")
     parser.add_argument("--json", action="store_true", help="Print JSON report to stdout")
     parser.add_argument("--report", type=Path, help="Write a Markdown report to this path")
     return parser.parse_args()

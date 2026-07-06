@@ -363,6 +363,38 @@ button {
   font-size: 13px;
 }
 
+.audit-log-panel {
+  margin: 0 18px;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  padding: 13px;
+  background: #ffffff;
+}
+
+.audit-log-panel > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.audit-log-panel strong {
+  color: #142033;
+  font-size: 14px;
+}
+
+.audit-log-panel span,
+.audit-log-panel li {
+  color: #657286;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.audit-log-panel ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
 .marking-matrix {
   display: grid;
   border-top: 1px solid #edf1f5;
@@ -541,6 +573,28 @@ button {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.evidence-set-picker {
+  min-width: min(420px, 44vw);
+  display: grid;
+  gap: 6px;
+}
+
+.evidence-set-picker span {
+  color: #39465a;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.evidence-set-picker select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #cfd9e5;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #1d2430;
+  background: #ffffff;
 }
 
 .primary-button {
@@ -799,8 +853,8 @@ button {
 }
 
 .status-badge.missing {
-  color: #b42318;
-  background: #ffebe9;
+  color: #955800;
+  background: #fff5d7;
 }
 
 .right-rail {
@@ -999,7 +1053,7 @@ button {
 }
 
 .bar-track .missing {
-  background: #d92d20;
+  background: #b65f00;
 }
 
 .report-copy {
@@ -1069,6 +1123,10 @@ button {
   .upload-actions,
   .filter-group {
     flex-wrap: wrap;
+  }
+
+  .evidence-set-picker {
+    min-width: 100%;
   }
 
   .table-row {

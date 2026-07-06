@@ -25,9 +25,7 @@ import {
 } from "lucide-react";
 import {
   buildReport,
-  collegeSampleFiles,
   defaultCriteriaText,
-  defaultEvidenceText,
   evidenceCategories,
   evaluateFiles,
   evaluateMarkingMatrix,
@@ -35,6 +33,7 @@ import {
   summarizeBlockedFiles,
 } from "./evidenceRules.js";
 import { assessmentIndex, assessmentSources, defaultAssessmentSourceId } from "./assessmentCriteria.js";
+import { collegeEvidenceSets, defaultCollegeEvidenceSetId } from "./collegeEvidenceManifest.js";
 
 const navItems = [
   { id: "marking", label: "Marking", icon: Scale },
@@ -47,7 +46,14 @@ const navItems = [
 const statusConfig = {
   pass: { label: "Pass", icon: CheckCircle2 },
   warning: { label: "Warning", icon: AlertTriangle },
-  missing: { label: "Missing", icon: XCircle },
+  missing: { label: "Needs review", icon: XCircle },
+};
+
+const statusFilterLabels = {
+  all: "all",
+  pass: "pass",
+  warning: "warning",
+  missing: "needs review",
 };
 
 const textScanLimit = 250_000;
@@ -56,7 +62,11 @@ const readableEvidencePattern =
 
 const defaultAssessmentSource =
   assessmentSources.find((source) => source.id === defaultAssessmentSourceId) || assessmentSources[0];
-const initialCriteriaText = defaultAssessmentSource?.criteriaText || defaultCriteriaText;
+const defaultCollegeEvidenceSet =
+  collegeEvidenceSets.find((set) => set.id === defaultCollegeEvidenceSetId) || collegeEvidenceSets[0];
+const initialCriteriaText = defaultCollegeEvidenceSet?.criteriaText || defaultAssessmentSource?.criteriaText || defaultCriteriaText;
+const initialEvidenceText = defaultCollegeEvidenceSet?.evidenceText || "";
+const initialCriteriaSourceId = defaultCollegeEvidenceSet?.criteriaSourceIds?.[0] || defaultAssessmentSource?.id || "";
 
 function criteriaLines(source) {
   return source?.criteriaText?.split(/\r?\n/).filter(Boolean) || [];
@@ -141,7 +151,15 @@ function BlockedFilesAlert({ blockedFiles }) {
   );
 }
 
-function UploadPanel({ onFiles, onSample, fileCount, blockedFiles }) {
+function UploadPanel({
+  onFiles,
+  onLoadCollegeSet,
+  fileCount,
+  blockedFiles,
+  evidenceSets,
+  selectedEvidenceSetId,
+  onEvidenceSetChange,
+}) {
   return (
     <section className="upload-panel">
       <div className="upload-copy">
@@ -160,9 +178,19 @@ function UploadPanel({ onFiles, onSample, fileCount, blockedFiles }) {
           Choose folder
           <input type="file" webkitdirectory="" directory="" multiple onChange={onFiles} />
         </label>
-        <button className="secondary-button" type="button" onClick={onSample}>
+        <label className="evidence-set-picker">
+          <span>Real College evidence set</span>
+          <select value={selectedEvidenceSetId} onChange={(event) => onEvidenceSetChange(event.target.value)}>
+            {evidenceSets.map((set) => (
+              <option key={set.id} value={set.id}>
+                {set.relativePath}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="secondary-button" type="button" onClick={onLoadCollegeSet}>
           <GraduationCap size={18} />
-          Load college sample
+          Load selected evidence
         </button>
       </div>
       <p className="folder-note">{fileCount} file(s) loaded for the current scan.</p>
@@ -192,6 +220,7 @@ function CriteriaSourcePanel({ sourceId, source, onSourceChange, onLoadSource })
           <label>
             <span>Assessment source</span>
             <select value={sourceId} onChange={(event) => onSourceChange(event.target.value)}>
+              <option value="">No criteria source selected</option>
               {assessmentSources.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.unit} - {item.title}
@@ -206,7 +235,7 @@ function CriteriaSourcePanel({ sourceId, source, onSourceChange, onLoadSource })
         </div>
       </div>
 
-      {source && (
+      {source ? (
         <div className="criteria-source-card">
           <strong>{source.title}</strong>
           <small>
@@ -218,7 +247,33 @@ function CriteriaSourcePanel({ sourceId, source, onSourceChange, onLoadSource })
             ))}
           </ul>
         </div>
+      ) : (
+        <div className="criteria-source-card">
+          <strong>No indexed source loaded</strong>
+          <small>The evidence folder can still be scanned, but A.L.I. will not infer criteria from another unit.</small>
+        </div>
       )}
+    </div>
+  );
+}
+
+function AuditLogPanel({ evidenceSet, analysis, marking }) {
+  return (
+    <div className="audit-log-panel">
+      <div>
+        <strong>Current marking log</strong>
+        <span>{evidenceSet ? evidenceSet.relativePath : "Manual folder upload"}</span>
+      </div>
+      <ul>
+        <li>{analysis.files.length} accepted file(s) loaded.</li>
+        <li>{analysis.blockedFiles?.length || 0} sensitive file(s) blocked before scoring.</li>
+        <li>{marking.rows.length} criteria row(s) active in the matrix.</li>
+        <li>
+          {evidenceSet?.criteriaSourceTitles?.length
+            ? `Criteria source(s): ${evidenceSet.criteriaSourceTitles.join("; ")}`
+            : "No indexed criteria source is attached to this evidence folder."}
+        </li>
+      </ul>
     </div>
   );
 }
@@ -235,6 +290,7 @@ function MarkingView({
   criteriaSource,
   onCriteriaSourceChange,
   onLoadCriteriaSource,
+  selectedEvidenceSet,
 }) {
   return (
     <section className="marking-section">
@@ -263,6 +319,8 @@ function MarkingView({
         onSourceChange={onCriteriaSourceChange}
         onLoadSource={onLoadCriteriaSource}
       />
+
+      <AuditLogPanel evidenceSet={selectedEvidenceSet} analysis={analysis} marking={marking} />
 
       <div className="marking-inputs">
         <label>
@@ -435,7 +493,7 @@ function EvidenceTable({ findings, filter, onFilter, selectedId, onSelect }) {
               type="button"
               onClick={() => onFilter(item)}
             >
-              {item}
+              {statusFilterLabels[item]}
             </button>
           ))}
         </div>
@@ -577,7 +635,7 @@ function RightRail({ analysis, selectedFinding, onExport }) {
         <div>
           <h2>Evidence score</h2>
           <p>
-            {analysis.counts.pass} pass, {analysis.counts.warning} warning, {analysis.counts.missing} missing.
+            {analysis.counts.pass} pass, {analysis.counts.warning} warning, {analysis.counts.missing} need review.
           </p>
         </div>
       </div>
@@ -619,14 +677,21 @@ function RightRail({ analysis, selectedFinding, onExport }) {
 
 export default function App() {
   const [activeView, setActiveView] = useState("marking");
-  const [files, setFiles] = useState(collegeSampleFiles);
-  const [blockedFiles, setBlockedFiles] = useState([]);
+  const [evidenceSetId, setEvidenceSetId] = useState(defaultCollegeEvidenceSet?.id || "");
+  const [files, setFiles] = useState(defaultCollegeEvidenceSet?.files || []);
+  const [blockedFiles, setBlockedFiles] = useState(
+    Array.from({ length: defaultCollegeEvidenceSet?.blockedFiles || 0 }, () => ({
+      reason: "Blocked during local audit",
+      size: 0,
+    })),
+  );
   const [manualTags, setManualTags] = useState({});
   const [filter, setFilter] = useState("all");
-  const [criteriaSourceId, setCriteriaSourceId] = useState(defaultAssessmentSource?.id || "");
+  const [criteriaSourceId, setCriteriaSourceId] = useState(initialCriteriaSourceId);
   const [criteriaText, setCriteriaText] = useState(initialCriteriaText);
-  const [evidenceText, setEvidenceText] = useState(defaultEvidenceText);
-  const criteriaSource = assessmentSources.find((source) => source.id === criteriaSourceId) || defaultAssessmentSource;
+  const [evidenceText, setEvidenceText] = useState(initialEvidenceText);
+  const selectedEvidenceSet = collegeEvidenceSets.find((set) => set.id === evidenceSetId) || null;
+  const criteriaSource = assessmentSources.find((source) => source.id === criteriaSourceId) || null;
   const evidenceFiles = useMemo(
     () => files.map((file) => ({ ...file, manualCategory: manualTags[file.path] || "" })),
     [files, manualTags],
@@ -683,11 +748,24 @@ export default function App() {
     setManualTags({});
     setSelectedId("python");
     setFilter("all");
+    setEvidenceSetId("");
   }
 
-  function loadSampleFiles() {
-    setFiles(collegeSampleFiles);
-    setBlockedFiles([]);
+  function loadCollegeEvidenceSet() {
+    const nextSet = collegeEvidenceSets.find((set) => set.id === evidenceSetId) || defaultCollegeEvidenceSet;
+    if (!nextSet) return;
+
+    setEvidenceSetId(nextSet.id);
+    setFiles(nextSet.files || []);
+    setBlockedFiles(
+      Array.from({ length: nextSet.blockedFiles || 0 }, () => ({
+        reason: "Blocked during local audit",
+        size: 0,
+      })),
+    );
+    setCriteriaSourceId(nextSet.criteriaSourceIds?.[0] || "");
+    setCriteriaText(nextSet.criteriaText || "");
+    setEvidenceText(nextSet.evidenceText || "");
     setManualTags({});
     setSelectedId("python");
     setFilter("all");
@@ -723,7 +801,6 @@ export default function App() {
   function loadDefaultCriteria() {
     setCriteriaSourceId(defaultAssessmentSource?.id || "");
     setCriteriaText(defaultAssessmentSource?.criteriaText || defaultCriteriaText);
-    setEvidenceText(defaultEvidenceText);
   }
 
   function exportReport() {
@@ -801,6 +878,7 @@ export default function App() {
                 criteriaSource={criteriaSource}
                 onCriteriaSourceChange={setCriteriaSourceId}
                 onLoadCriteriaSource={loadCriteriaSource}
+                selectedEvidenceSet={selectedEvidenceSet}
               />
             )}
             {activeView === "scan" && (
@@ -809,7 +887,10 @@ export default function App() {
                   fileCount={files.length}
                   blockedFiles={blockedFiles}
                   onFiles={handleFiles}
-                  onSample={loadSampleFiles}
+                  onLoadCollegeSet={loadCollegeEvidenceSet}
+                  evidenceSets={collegeEvidenceSets}
+                  selectedEvidenceSetId={evidenceSetId || defaultCollegeEvidenceSet?.id || ""}
+                  onEvidenceSetChange={setEvidenceSetId}
                 />
                 <FileReviewPanel
                   files={evidenceFiles}

@@ -205,26 +205,11 @@ const qualityRules = [
   },
 ];
 
-export const collegeSampleFiles = [
-  { path: "sample-coursework/scripts/assessment_classifier.py", name: "assessment_classifier.py", size: 1840 },
-  { path: "sample-coursework/notebooks/unit4_vector_demo.ipynb", name: "unit4_vector_demo.ipynb", size: 2840 },
-  { path: "sample-coursework/data/titanic_features.csv", name: "titanic_features.csv", size: 432 },
-  { path: "sample-coursework/data/model_metrics.csv", name: "model_metrics.csv", size: 214 },
-  { path: "sample-coursework/evidence/coursework-folder-preview.jpg", name: "coursework-folder-preview.jpg", size: 56368 },
-  { path: "sample-coursework/model-output/training_metrics.csv", name: "training_metrics.csv", size: 243 },
-  { path: "sample-coursework/model-output/assessment_summary.json", name: "assessment_summary.json", size: 601 },
-  { path: "sample-coursework/model-output/best_model_checkpoint.pt", name: "best_model_checkpoint.pt", size: 128 },
-  { path: "sample-coursework/docs/README.md", name: "README.md", size: 1280 },
-  { path: "sample-coursework/docs/git-evidence.md", name: "git-evidence.md", size: 640 },
-];
-
 export const defaultCriteriaText = `AC2.3 - Use version control software to commit, push and evidence changes to a project.
 AC3.1 - Write Python code that uses functions, structured logic and reusable scripts.
 AC3.2 - Use Python libraries such as NumPy or Pandas to process data and produce outputs.
 AC4.1 - Provide model evidence including validation metrics, training outputs or checkpoints.
 AC4.2 - Explain the evidence clearly with documentation, screenshots and assessor-readable notes.`;
-
-export const defaultEvidenceText = `The sample submission includes a Python script, a Jupyter notebook, CSV datasets, Git evidence notes, validation metrics, a model checkpoint, a JSON model summary, screenshot evidence and README documentation.`;
 
 const criteriaMatrix = [
   {
@@ -251,6 +236,9 @@ const criteriaMatrix = [
     evidenceId: "metrics",
     label: "Validation metrics",
     keywords: [
+      "calculus",
+      "derivative",
+      "gradient",
       "metric",
       "accuracy",
       "loss",
@@ -291,7 +279,21 @@ const criteriaMatrix = [
   {
     evidenceId: "documentation",
     label: "Documentation",
-    keywords: ["document", "documentation", "readme", "explain", "report", "notes", "guide", "assessor"],
+    keywords: [
+      "describe",
+      "document",
+      "documentation",
+      "explain",
+      "give examples",
+      "notes",
+      "outline",
+      "provide examples",
+      "purpose",
+      "readme",
+      "report",
+      "guide",
+      "assessor",
+    ],
   },
 ];
 
@@ -373,7 +375,7 @@ function evaluatePresence(rule, files) {
       ? `${matches.length} matching item(s) found.`
       : status === "warning"
         ? `${matches.length} found, but ${rule.minimum} expected for stronger evidence.`
-        : "No matching evidence found.";
+        : "No automatic evidence match in the currently loaded files.";
 
   return {
     ...rule,
@@ -470,6 +472,12 @@ function statusValue(status) {
   return 0;
 }
 
+function statusLabel(status) {
+  if (status === "pass") return "pass";
+  if (status === "warning") return "warning";
+  return "needs review";
+}
+
 export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
   const lowerEvidence = evidenceText.toLowerCase();
   const criteria = splitCriteria(criteriaText);
@@ -482,7 +490,7 @@ export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
         const criterionHits = matrixItem.keywords.filter((keyword) => lowerCriterion.includes(keyword));
         const evidenceHits = matrixItem.keywords.filter((keyword) => lowerEvidence.includes(keyword));
         const finding = findingById[matrixItem.evidenceId];
-        const relevance = criterionHits.length * 2 + Math.min(evidenceHits.length, 2);
+        const relevance = criterionHits.length ? criterionHits.length * 2 + Math.min(evidenceHits.length, 2) : 0;
         return {
           ...matrixItem,
           finding,
@@ -494,39 +502,32 @@ export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
       })
       .filter((item) => item.relevance > 0);
 
-    const fallback = mapped.length
-      ? mapped
-      : criteriaMatrix.slice(0, 4).map((matrixItem) => ({
-          ...matrixItem,
-          finding: findingById[matrixItem.evidenceId],
-          criterionHits: [],
-          evidenceHits: [],
-          relevance: 1,
-          value: findingById[matrixItem.evidenceId] ? statusValue(findingById[matrixItem.evidenceId].status) : 0,
-        }));
+    const mappedEvidence = mapped;
 
-    const totalWeight = fallback.reduce((sum, item) => sum + item.relevance, 0);
-    const earned = fallback.reduce((sum, item) => sum + item.value * item.relevance, 0);
-    const score = Math.round((earned / totalWeight) * 100);
+    const totalWeight = mappedEvidence.reduce((sum, item) => sum + item.relevance, 0);
+    const earned = mappedEvidence.reduce((sum, item) => sum + item.value * item.relevance, 0);
+    const score = totalWeight ? Math.round((earned / totalWeight) * 100) : 0;
     const confidence = Math.min(95, Math.round(45 + Math.min(totalWeight, 10) * 5 + analysis.score * 0.2));
-    const draftMark = score >= 75 ? "Met" : score >= 45 ? "Partially evidenced" : "Not evidenced";
+    const draftMark = totalWeight === 0 ? "Needs manual mapping" : score >= 75 ? "Met" : score >= 45 ? "Partially evidenced" : "Not evidenced";
     const humanReview =
-      confidence < 70 || score < 75
+      totalWeight === 0
+        ? "No automatic evidence category matched this criterion. Select evidence manually or review the file list."
+        : confidence < 70 || score < 75
         ? "Human review required before this can be treated as a mark."
         : "Strong evidence match, still requires assessor confirmation.";
 
     return {
       ...criterion,
-      mappedEvidence: fallback,
+      mappedEvidence,
       score,
       confidence,
       draftMark,
       humanReview,
       rationale:
-        fallback
+        mappedEvidence
           .slice(0, 4)
-          .map((item) => `${item.label}: ${item.finding?.status || "missing"}`)
-          .join("; ") || "No evidence categories mapped.",
+          .map((item) => `${item.label}: ${statusLabel(item.finding?.status)}`)
+          .join("; ") || "No automatic evidence categories mapped.",
     };
   });
 
@@ -537,7 +538,8 @@ export function evaluateMarkingMatrix(analysis, criteriaText, evidenceText) {
   return {
     rows,
     overallScore,
-    assessorNote:
-      "Draft marks are produced from evidence presence and keyword mapping. A tutor must confirm quality, authenticity and sufficiency.",
+    assessorNote: rows.length
+      ? "Draft marks are produced only from the loaded criteria rows and currently loaded evidence. A tutor must confirm quality, authenticity and sufficiency."
+      : "No criteria rows are loaded, so A.L.I. has scanned the evidence files but has not produced criterion marks.",
   };
 }

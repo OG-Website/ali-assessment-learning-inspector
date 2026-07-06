@@ -4,5 +4,6 @@ reports/
 *.local.json
 *.log
 *.zip
+Launch A.L.I. Marking Matrix.ps1
 .env
 .env.*

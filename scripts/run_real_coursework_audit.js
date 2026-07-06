@@ -10,7 +10,7 @@ import {
   getSensitiveFileIssue,
   summarizeBlockedFiles,
 } from "../src/evidenceRules.js";
-import { assessmentIndex, assessmentSources, defaultAssessmentSourceId } from "../src/assessmentCriteria.js";
+import { assessmentIndex, assessmentSources } from "../src/assessmentCriteria.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,11 +59,79 @@ const defaultAuditFolders = [
   "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 6 - Pretrained Networks and Image Processing Project",
 ];
 
+const criteriaSourceIdsByAuditFolder = {
+  "Unit 1/assessment 1": [],
+  "Unit 1/assessment 2": ["src-055-unit-1-assessment-2-file-index-txt"],
+  "Unit 1/Assessment 3": [],
+  "Unit 2 Git/AC2.3 Commit Version Control Evidence/AC2.3 Submission Pack - Rob Johnston": [
+    "src-057-unit-2-git-ac2-3-commit-version-control-evidence-ac2-3-submission-pack",
+  ],
+  "Unit 2 Git/Assessment 3/Assessment 3 - OG Web.site Submission Pack": [
+    "src-062-unit-2-git-assessment-3-assessment-3-og-web-site-submission-pack-01-ev",
+    "src-064-unit-2-git-assessment-3-assessment-3-og-web-site-submission-pack-02-gi",
+    "src-066-unit-2-git-assessment-3-assessment-3-og-web-site-submission-pack-04-we",
+    "src-070-unit-2-git-assessment-3-assessment-3-og-web-site-submission-pack-file-",
+    "src-100-unit-2-git-resources-20260615-assessment-support-documents-tquk-observ",
+  ],
+  "Unit 3 - Libraries for python/Assessment 3 - NumPy ndarray Evidence": [
+    "src-121-unit-3-libraries-for-python-assessment-3-numpy-ndarray-evidence-ss-evi",
+  ],
+  "Unit 3 - Libraries for python/Assessment 4 - Pandas Evidence": [
+    "src-126-unit-3-libraries-for-python-assessment-4-pandas-evidence-ss-evidence-c",
+  ],
+  "Unit 3 - Libraries for python/Assessment 5 - Visualisation Answer Sheet": [],
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 1 - Deep Learning": [
+    "src-190-unit-4-linear-algebra-essentials-for-deep-learning-assessments-criteri",
+  ],
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 2 - Validation Datasets and Metrics": [
+    "src-190-unit-4-linear-algebra-essentials-for-deep-learning-assessments-criteri",
+  ],
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 3 - Vectors": [
+    "src-164-unit-4-linear-algebra-essentials-for-deep-learning-assessment-3-vector",
+  ],
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 4 - Linear Algebra and Matrices": [
+    "src-169-unit-4-linear-algebra-essentials-for-deep-learning-assessment-4-linear",
+    "src-170-unit-4-linear-algebra-essentials-for-deep-learning-assessment-4-linear",
+  ],
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 5 - Deep Learning Training Project": [
+    "src-174-unit-4-linear-algebra-essentials-for-deep-learning-assessment-5-deep-l",
+  ],
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 6 - Pretrained Networks and Image Processing Project": [
+    "src-186-unit-4-linear-algebra-essentials-for-deep-learning-assessment-6-pretra",
+    "src-190-unit-4-linear-algebra-essentials-for-deep-learning-assessments-criteri",
+  ],
+};
+
+const criteriaTextByAuditFolder = {
+  "Unit 2 Git/Assessment 3/Assessment 3 - OG Web.site Submission Pack": `2.4 Demonstrate how to mark files as untracked in GitHub.
+4.1 Demonstrate how to organise commits with tags and branches using GitHub.
+4.2 Demonstrate how to check branches have changed in GitHub.
+4.3 Demonstrate how to merge branches using GitHub.`,
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 1 - Deep Learning": `AC 1.1 Explain what deep learning is.
+AC 1.2 Outline how calculus supports deep learning.
+AC 2.1 Explain what a derivative is and its purpose.
+AC 2.2 Outline the need for derivatives in deep learning.
+AC 2.1 Outline what gradient descent is.
+AC 2.2 Explain the importance of implementing gradient descent.
+AC 2.3 Describe the benefits of gradient descent.`,
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 2 - Validation Datasets and Metrics": `AC 1.1 Explain the difference between testing and validation datasets.
+AC 1.2 Describe the purpose of validation loss and accuracy.`,
+  "Unit 4 - Linear Algebra Essentials for Deep Learning/Assessment 6 - Pretrained Networks and Image Processing Project": `3.3 Demonstrate how to use deep learning for inference.
+4.1 Demonstrate the use of pre-trained networks.
+4.2 Create a training script that utilises the GPU.
+4.3 Demonstrate the use of image processing.
+4.4 Demonstrate data normalisation.
+4.5 Demonstrate data augmentation.
+4.6 Demonstrate the use of data loading and data batching for training, validation, and testing.
+4.7 Demonstrate how to save the model and load checkpoints.`,
+};
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
     root: defaultAiProgrammingRoot,
     out: path.resolve(repoRoot, "real-coursework-audit"),
+    manifest: "",
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -74,8 +142,11 @@ function parseArgs() {
     } else if (arg === "--out") {
       options.out = path.resolve(args[index + 1]);
       index += 1;
+    } else if (arg === "--manifest") {
+      options.manifest = path.resolve(args[index + 1]);
+      index += 1;
     } else if (arg === "--help") {
-      console.log("Usage: node scripts/run_real_coursework_audit.js [--root <AI Programming root>] [--out <report folder>]");
+      console.log("Usage: node scripts/run_real_coursework_audit.js [--root <AI Programming root>] [--out <report folder>] [--manifest <JS file>]");
       process.exit(0);
     }
   }
@@ -96,54 +167,15 @@ function slugify(value) {
   return normaliseText(value).replace(/\./g, "-").replace(/\s+/g, "-").slice(0, 90) || "audit";
 }
 
-function unitNumber(value) {
-  return value.match(/unit\s*[-_ ]?(\d+)/i)?.[1] || "";
-}
-
-function assessmentNumber(value) {
-  const acMatch = value.match(/\bac\s*(\d+(?:\.\d+)?)/i);
-  if (acMatch) return acMatch[1];
-  return value.match(/assessment\s*[-_ ]?(\d+)/i)?.[1] || "";
-}
-
-function sourceScore(auditPath, source) {
-  const audit = normaliseText(auditPath);
-  const haystack = normaliseText(`${source.unit} ${source.title} ${source.path} ${source.criteriaText}`);
-  const auditUnit = unitNumber(auditPath);
-  const auditAssessment = assessmentNumber(auditPath);
-  let score = 0;
-
-  if (auditUnit && (haystack.includes(`unit ${auditUnit}`) || haystack.includes(`unit-${auditUnit}`))) score += 5;
-  if (auditAssessment && haystack.includes(auditAssessment)) score += 6;
-  if (audit.includes("ac2.3") && source.id === defaultAssessmentSourceId) score += 12;
-
-  for (const word of audit.split(/\s+/).filter((item) => item.length >= 5)) {
-    if (haystack.includes(word)) score += 1;
-  }
-
-  return score;
-}
-
 function chooseCriteriaSources(auditPath) {
-  const chosen = [];
-  const seenTitles = new Set();
-  const scored = assessmentSources
-    .map((source) => ({ source, score: sourceScore(auditPath, source) }))
-    .filter(({ score }) => score > 4)
-    .sort((a, b) => b.score - a.score)
-    .map(({ source }) => source);
-
-  for (const source of scored) {
-    const titleKey = normaliseText(source.title);
-    if (!seenTitles.has(titleKey)) {
-      chosen.push(source);
-      seenTitles.add(titleKey);
-    }
-    if (chosen.length === 4) break;
+  const exactIds = criteriaSourceIdsByAuditFolder[auditPath];
+  if (Array.isArray(exactIds)) {
+    return exactIds
+      .map((id) => assessmentSources.find((source) => source.id === id))
+      .filter(Boolean);
   }
 
-  if (chosen.length) return chosen;
-  return assessmentSources.filter((source) => source.id === defaultAssessmentSourceId);
+  return [];
 }
 
 function uniqueCriteriaText(sources) {
@@ -161,6 +193,16 @@ function uniqueCriteriaText(sources) {
   }
 
   return lines.join("\n");
+}
+
+function criteriaTextForAuditFolder(auditPath, sources) {
+  return criteriaTextByAuditFolder[auditPath] || uniqueCriteriaText(sources);
+}
+
+function displayStatus(status) {
+  if (status === "pass") return "pass";
+  if (status === "warning") return "warning";
+  return "needs review";
 }
 
 function readTextFile(filePath) {
@@ -315,9 +357,19 @@ function buildEvidenceEntries(root) {
 function buildEvidenceText(files, findings) {
   const names = files.map((file) => file.path).join("\n");
   const findingLines = findings
-    .map((finding) => `${finding.label}: ${finding.status}; ${finding.matches.map((file) => file.path).join(", ")}`)
+    .map((finding) => `${finding.label}: ${displayStatus(finding.status)}; ${finding.matches.map((file) => file.path).join(", ")}`)
     .join("\n");
   return `${names}\n${findingLines}`;
+}
+
+function publicFile(file) {
+  return {
+    path: file.path,
+    name: file.name,
+    size: file.size,
+    contentScanned: file.contentScanned,
+    contentTruncated: file.contentTruncated,
+  };
 }
 
 function markdownTable(rows) {
@@ -340,7 +392,7 @@ function compactMarking(marking) {
         evidenceId: item.evidenceId,
         label: item.label,
         relevance: item.relevance,
-        status: item.finding?.status || "missing",
+        status: displayStatus(item.finding?.status),
         matchCount: item.finding?.matches?.length || 0,
       })),
     })),
@@ -371,9 +423,11 @@ function writeAssessmentReport({ outDir, label, relativePath, criteriaSources, a
     "",
     "## Criteria Sources Used",
     "",
-    ...criteriaSources.map(
-      (source) => `- ${source.title} (${source.unit}, ${source.type.toUpperCase()}, ${source.criteriaCount} criteria) - ${source.path}`,
-    ),
+    ...(criteriaSources.length
+      ? criteriaSources.map(
+          (source) => `- ${source.title} (${source.unit}, ${source.type.toUpperCase()}, ${source.criteriaCount} criteria) - ${source.path}`,
+        )
+      : ["- No indexed criteria source was found for this folder. Evidence was scanned, but criterion marking was not inferred from another unit."]),
     "",
     "## Draft Marking Matrix",
     "",
@@ -390,7 +444,7 @@ function writeAssessmentReport({ outDir, label, relativePath, criteriaSources, a
     "| --- | --- | ---: | --- |",
     ...analysis.findings.map(
       (finding) =>
-        `| ${finding.label} | ${finding.status} | ${finding.matches.length} | ${finding.note.replaceAll("|", "\\|")} |`,
+        `| ${finding.label} | ${displayStatus(finding.status)} | ${finding.matches.length} | ${finding.note.replaceAll("|", "\\|")} |`,
     ),
     "",
   ];
@@ -421,6 +475,7 @@ function runAudit(options) {
   fs.mkdirSync(outDir, { recursive: true });
 
   const summaries = [];
+  const manifestSets = [];
   for (const relativePath of defaultAuditFolders) {
     const absolutePath = path.join(options.root, relativePath);
     if (!fs.existsSync(absolutePath)) {
@@ -429,8 +484,9 @@ function runAudit(options) {
     }
 
     const label = relativePath.split(/[\\/]/).pop();
+    const id = slugify(label);
     const criteriaSources = chooseCriteriaSources(relativePath);
-    const criteriaText = uniqueCriteriaText(criteriaSources);
+    const criteriaText = criteriaTextForAuditFolder(relativePath, criteriaSources);
     const { files, blockedFiles } = buildEvidenceEntries(absolutePath);
     const analysis = { ...evaluateFiles(files), blockedFiles };
     const evidenceText = buildEvidenceText(files, analysis.findings);
@@ -439,6 +495,7 @@ function runAudit(options) {
     const paths = writeAssessmentReport({ outDir, label, relativePath, criteriaSources, analysis, marking, report });
 
     summaries.push({
+      id,
       label,
       relativePath,
       score: report.score,
@@ -451,6 +508,26 @@ function runAudit(options) {
       criteriaSources: criteriaSources.map((source) => source.title),
       markdownReport: path.basename(paths.mdPath),
       jsonReport: path.basename(paths.jsonPath),
+    });
+
+    manifestSets.push({
+      id,
+      label,
+      relativePath,
+      criteriaSourceIds: criteriaSources.map((source) => source.id),
+      criteriaSourceTitles: criteriaSources.map((source) => source.title),
+      criteriaText,
+      evidenceText,
+      files: files.map(publicFile),
+      blockedFiles: blockedFiles.length,
+      report: {
+        score: report.score,
+        counts: report.summary,
+        scannedFiles: report.scannedFiles,
+        blockedFiles: report.blockedFiles,
+        priorityActions: report.priorityActions,
+      },
+      marking: compactMarking(marking),
     });
   }
 
@@ -482,7 +559,7 @@ function runAudit(options) {
       "| --- | ---: | ---: | ---: | ---: | --- |",
       ...summaries.map((item) =>
         item.missing
-          ? `| ${item.label} | missing | missing | 0 | 0 | folder not found |`
+          ? `| ${item.label} | not scanned | not scanned | 0 | 0 | folder not found |`
           : `| ${item.label} | ${item.score}% | ${item.overallCriteriaScore}% | ${item.scannedFiles} | ${item.blockedFiles} | ${item.markdownReport} |`,
       ),
     ]),
@@ -496,6 +573,25 @@ function runAudit(options) {
   ];
 
   fs.writeFileSync(path.join(outDir, "audit-summary.md"), `${summaryLines.join("\n")}\n`, "utf8");
+
+  if (options.manifest) {
+    const manifest = {
+      generatedAt: new Date().toISOString(),
+      rootLabel: "Local AI Programming evidence folders",
+      sourceFolderCount: manifestSets.length,
+      criteriaSourceCount: assessmentIndex.indexedSourceCount,
+      defaultSetId: manifestSets.find((item) => item.id === "ac2-3-submission-pack")?.id || manifestSets[0]?.id || "",
+      sets: manifestSets,
+    };
+
+    fs.mkdirSync(path.dirname(options.manifest), { recursive: true });
+    fs.writeFileSync(
+      options.manifest,
+      `// Generated by scripts/run_real_coursework_audit.js. Do not edit by hand.\nexport const collegeEvidenceManifest = ${JSON.stringify(manifest, null, 2)};\n\nexport const collegeEvidenceSets = collegeEvidenceManifest.sets;\nexport const defaultCollegeEvidenceSetId = collegeEvidenceManifest.defaultSetId;\n`,
+      "utf8",
+    );
+  }
+
   return summary;
 }
 
