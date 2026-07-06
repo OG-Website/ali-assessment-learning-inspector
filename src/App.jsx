@@ -43,6 +43,8 @@ const navItems = [
   { id: "report", label: "Report", icon: ShieldCheck },
 ];
 
+const aliExpansion = "Assessment Learning Inspector";
+
 const statusConfig = {
   pass: { label: "Pass", icon: CheckCircle2 },
   warning: { label: "Warning", icon: AlertTriangle },
@@ -70,6 +72,29 @@ const initialCriteriaSourceId = defaultCollegeEvidenceSet?.criteriaSourceIds?.[0
 
 function criteriaLines(source) {
   return source?.criteriaText?.split(/\r?\n/).filter(Boolean) || [];
+}
+
+function criterionTextFromRaw(raw) {
+  return String(raw || "").replace(/^[A-Z]*\s*\d+(?:\.\d+)?\s*[-:|)]+\s*/i, "");
+}
+
+function statusFromDisplay(value) {
+  if (value === "pass" || value === "warning") return value;
+  return "missing";
+}
+
+function hydrateManifestMarking(marking) {
+  return {
+    ...marking,
+    rows: (marking?.rows || []).map((row) => ({
+      ...row,
+      text: row.text || criterionTextFromRaw(row.raw),
+      mappedEvidence: (row.mappedEvidence || []).map((item) => ({
+        ...item,
+        status: statusFromDisplay(item.status),
+      })),
+    })),
+  };
 }
 
 function canReadTextForSearch(file, path) {
@@ -120,13 +145,19 @@ function StatusBadge({ status }) {
 
 function ScoreRing({ score }) {
   return (
-    <div className="score-ring" style={{ "--score": `${score * 3.6}deg` }} aria-label={`Evidence score ${score}%`}>
+    <div className="score-ring" style={{ "--score": `${score * 3.6}deg` }} aria-label={`Score ${score}%`}>
       <div>
         <strong>{score}</strong>
         <span>%</span>
       </div>
     </div>
   );
+}
+
+function rowStatus(row) {
+  if (row.score >= 75) return "pass";
+  if (row.score >= 45) return "warning";
+  return "missing";
 }
 
 function BlockedFilesAlert({ blockedFiles }) {
@@ -291,6 +322,7 @@ function MarkingView({
   onCriteriaSourceChange,
   onLoadCriteriaSource,
   selectedEvidenceSet,
+  markingSource,
 }) {
   return (
     <section className="marking-section">
@@ -299,12 +331,12 @@ function MarkingView({
         <div>
           <div className="hero-label">
             <Sparkles size={16} />
-            OG branded assessor support
+            A.L.I. = {aliExpansion}
           </div>
           <h2>OG A.L.I. Marking Matrix</h2>
           <p>
-            Paste assessment criteria, scan the evidence folder, and A.L.I. produces a transparent
-            draft mark for each criterion with confidence and human-review notes.
+            Assessment Learning Inspector for Ali: load the criteria, scan the evidence folder, and produce a
+            transparent draft mark for each criterion with the mapped evidence shown beside it.
           </p>
         </div>
         <div className="marking-score">
@@ -339,7 +371,7 @@ function MarkingView({
           Load default AC2.3 criteria
         </button>
         <span>
-          Uses {analysis.findings.length} evidence checks and {marking.rows.length} criteria rows.
+          {markingSource}
         </span>
       </div>
 
@@ -361,7 +393,7 @@ function MarkingView({
               <small>{row.humanReview}</small>
             </span>
             <span>
-              <StatusBadge status={row.score >= 75 ? "pass" : row.score >= 45 ? "warning" : "missing"} />
+              <StatusBadge status={rowStatus(row)} />
               <small>{row.score}% evidence match</small>
             </span>
             <span>
@@ -627,7 +659,76 @@ function ReportView({ report }) {
   );
 }
 
-function RightRail({ analysis, selectedFinding, onExport }) {
+function MarkingRail({ marking, onExport }) {
+  const mappedEvidence = [];
+  const seen = new Set();
+
+  marking.rows.forEach((row) => {
+    row.mappedEvidence.forEach((item) => {
+      if (!seen.has(item.evidenceId)) {
+        seen.add(item.evidenceId);
+        mappedEvidence.push({ ...item, status: statusFromDisplay(item.status) });
+      }
+    });
+  });
+
+  const conclusion =
+    marking.overallScore >= 75
+      ? "Criteria evidenced"
+      : marking.overallScore >= 45
+        ? "Partially evidenced"
+        : "Needs review";
+
+  return (
+    <aside className="right-rail">
+      <div className="rail-top">
+        <ScoreRing score={marking.overallScore} />
+        <div>
+          <h2>Assessment mark</h2>
+          <p>
+            {marking.rows.length} criteria row(s) scored from mapped evidence only. Unrelated generic checks are excluded.
+          </p>
+        </div>
+      </div>
+      <button className="export-button" type="button" onClick={onExport}>
+        <Download size={18} />
+        Export report JSON
+      </button>
+      <div className="selected-finding">
+        <div>
+          <Gauge size={18} />
+          <strong>Conclusion</strong>
+        </div>
+        <StatusBadge status={marking.overallScore >= 75 ? "pass" : marking.overallScore >= 45 ? "warning" : "missing"} />
+        <p className="finding-note">{conclusion}</p>
+        <ul>
+          {marking.rows.slice(0, 5).map((row) => (
+            <li key={`${row.id}-${row.text}`}>
+              {row.id}: {row.draftMark} ({row.score}%)
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="skills-panel">
+        <div>
+          <Layers3 size={18} />
+          <strong>Mapped evidence used</strong>
+        </div>
+        {mappedEvidence.length ? (
+          mappedEvidence.map((item) => (
+            <span key={item.evidenceId}>
+              {item.label}: {statusConfig[item.status]?.label || item.status}
+            </span>
+          ))
+        ) : (
+          <span>No mapped evidence</span>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function EvidenceRail({ analysis, selectedFinding, onExport }) {
   return (
     <aside className="right-rail">
       <div className="rail-top">
@@ -703,10 +804,22 @@ export default function App() {
   const [selectedId, setSelectedId] = useState("python");
   const selectedFinding = analysis.findings.find((finding) => finding.id === selectedId) || analysis.findings[0];
   const report = useMemo(() => buildReport(analysis), [analysis]);
+  const canUseManifestMarking =
+    Boolean(selectedEvidenceSet?.marking) &&
+    files === selectedEvidenceSet.files &&
+    Object.keys(manualTags).length === 0 &&
+    criteriaText === selectedEvidenceSet.criteriaText &&
+    evidenceText === selectedEvidenceSet.evidenceText;
   const marking = useMemo(
-    () => evaluateMarkingMatrix(analysis, criteriaText, evidenceText),
-    [analysis, criteriaText, evidenceText],
+    () =>
+      canUseManifestMarking
+        ? hydrateManifestMarking(selectedEvidenceSet.marking)
+        : evaluateMarkingMatrix(analysis, criteriaText, evidenceText),
+    [analysis, canUseManifestMarking, criteriaText, evidenceText, selectedEvidenceSet],
   );
+  const markingSource = canUseManifestMarking
+    ? `Using real local audit result from ${selectedEvidenceSet.relativePath}; ${marking.rows.length} criteria row(s).`
+    : `Using browser evidence checks and ${marking.rows.length} criteria row(s).`;
 
   async function handleFiles(event) {
     const selectedFiles = Array.from(event.target.files || []);
@@ -804,7 +917,19 @@ export default function App() {
   }
 
   function exportReport() {
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const payload = {
+      report,
+      marking,
+      selectedEvidenceSet: selectedEvidenceSet
+        ? {
+            id: selectedEvidenceSet.id,
+            label: selectedEvidenceSet.label,
+            relativePath: selectedEvidenceSet.relativePath,
+            criteriaSourceTitles: selectedEvidenceSet.criteriaSourceTitles,
+          }
+        : null,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -820,7 +945,8 @@ export default function App() {
           <img src={`${import.meta.env.BASE_URL}og-logo.png`} alt="OG logo" />
           <div>
             <strong>OG A.L.I.</strong>
-            <span>Marking Matrix</span>
+            <span>{aliExpansion}</span>
+            <small>Marking Matrix</small>
           </div>
         </div>
         <nav>
@@ -841,7 +967,7 @@ export default function App() {
         </nav>
         <div className="ali-note">
           <strong>For Ali</strong>
-          <span>Evidence-first marking support for practical AI Programming work.</span>
+          <span>Assessment Learning Inspector for practical AI Programming evidence.</span>
         </div>
       </aside>
 
@@ -853,7 +979,10 @@ export default function App() {
               <span>OG branded assessor tool</span>
             </div>
             <h1>OG A.L.I. - Marking Matrix</h1>
-            <p>Scan coursework evidence, map it to criteria, and produce transparent draft marks for human review.</p>
+            <p>
+              A.L.I. stands for {aliExpansion}. It maps loaded assessment criteria to the evidence that is actually
+              present, then produces transparent draft marks for human review.
+            </p>
           </div>
           <div className="topbar-stats">
             <span>{analysis.files.length} files</span>
@@ -879,6 +1008,7 @@ export default function App() {
                 onCriteriaSourceChange={setCriteriaSourceId}
                 onLoadCriteriaSource={loadCriteriaSource}
                 selectedEvidenceSet={selectedEvidenceSet}
+                markingSource={markingSource}
               />
             )}
             {activeView === "scan" && (
@@ -912,7 +1042,11 @@ export default function App() {
             {activeView === "metrics" && <MetricsView analysis={analysis} />}
             {activeView === "report" && <ReportView report={report} />}
           </div>
-          <RightRail analysis={analysis} selectedFinding={selectedFinding} onExport={exportReport} />
+          {activeView === "marking" ? (
+            <MarkingRail marking={marking} onExport={exportReport} />
+          ) : (
+            <EvidenceRail analysis={analysis} selectedFinding={selectedFinding} onExport={exportReport} />
+          )}
         </div>
       </main>
     </div>
